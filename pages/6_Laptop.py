@@ -391,7 +391,7 @@ with spec_col1:
         """, unsafe_allow_html=True)
 
 with spec_col2:
-    ram_dist = df_filtered['RAM_SIZE'].value_counts()
+    ram_dist = df_filtered['RAM_SIZE'].value_counts().head(5)
     st.markdown("<div class='label'>RAM Distribution</div>", unsafe_allow_html=True)
     for ram, count in ram_dist.items():
         pct = (count / len(df_filtered) * 100)
@@ -491,204 +491,251 @@ st.markdown("---")
 
 
 
-# ============== FIXED Laptop Forecast Logic ==============
+# ============== FIXED Laptop Forecast Logic (No History + Translations) ==============
 
 # Initialize forecast variables with defaults
 next_pred = avg_price  # Default to current average
-pred_change = 0
 avg_uncertainty = 0
-hist_vol = 0
 
 # 1. Define path to forecasting folder
 FORECAST_DIR = os.path.join(os.path.dirname(__file__), "forecasting_laptops")
 
 # Check if folder exists
 if os.path.exists(FORECAST_DIR) and not df_laptops.empty:
-    # 2. Find all CSV files and extract group names
+    # 2. Find all CSV files and parse names correctly
     forecast_files = glob.glob(os.path.join(FORECAST_DIR, '*.csv'))
-    available_forecasts = []
+    
+    # Helper function to translate French/Algerian conditions to English
+    def get_readable_condition(condition_key):
+        # Normalize key to uppercase for consistent matching
+        key_norm = condition_key.upper().replace('_', ' ')
+        
+        # Mapping dictionary for common terms
+        mapping = {
+            "BON TAT": "Good State",
+            "JAMAIS UTILIS": "Never Used",
+            "MOYEN": "Fair",
+            "NEUF": "New",
+            "TRES BON": "Very Good",
+            "ETAT NEUF": "Brand New"
+        }
+        
+        # Return mapped value or default (Title Case)
+        return mapping.get(key_norm, condition_key.replace('_', ' ').title())
+
+    # Dictionary to map display name -> actual filename
+    forecast_options = {}
     
     for file in forecast_files:
         filename = os.path.basename(file)
-        name = filename.replace('_forecast.csv', '').replace('_', ' | ')
-        available_forecasts.append(name)
-    
-    available_forecasts.sort()
+        # Remove the suffix '_forecast.csv' to get the core identifier
+        # e.g., 'BON_TAT_Entry-Level_forecast.csv' -> 'BON_TAT_Entry-Level'
+        name_part = filename.replace('_forecast.csv', '')
+        
+        # Logic: The filename format is Condition_Tier.
+        # Since Condition might contain underscores (e.g., BON_TAT), we split from the RIGHT.
+        parts = name_part.rsplit('_', 1)
+        
+        if len(parts) == 2:
+            condition_raw = parts[0] # e.g., 'BON_TAT'
+            tier = parts[1]           # e.g., 'Entry-Level'
+            
+            # Translate the condition to meaningful English
+            condition_readable = get_readable_condition(condition_raw)
+            
+            # Create a readable display name for the UI
+            display_name = f"{condition_readable} | {tier}"
+            forecast_options[display_name] = filename
+        else:
+            # Fallback for unexpected formats
+            display_name = name_part.replace('_', ' ').title()
+            forecast_options[display_name] = filename
+
+    # Sort options alphabetically
+    sorted_display_names = sorted(forecast_options.keys())
 
     # 3. UI: Select Box to choose item
     st.markdown("### 🔮 Select Laptop Group to Forecast")
-    st.markdown("<div style='color: #808080; margin-bottom: 16px;'>Select a condition & performance tier (e.g., 'BON TAT | High-End')</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color: #808080; margin-bottom: 16px;'>Select a condition & performance tier</div>", unsafe_allow_html=True)
     
-    selected_forecast_item = st.selectbox(
+    selected_display_name = st.selectbox(
         "Available Forecasts",
-        available_forecasts,
+        sorted_display_names,
         label_visibility="collapsed"
     )
+
+    # 4. Disclaimer Note
+    st.info("⚠️ **Note:** This forecast predicts market **trends** based on historical data. It estimates future price movements but does not guarantee an exact sale price for a specific item.")
     
-    # 4. Load the specific forecast data
-    safe_name = selected_forecast_item.replace(' | ', '_')
-    forecast_path = os.path.join(FORECAST_DIR, f"{safe_name}_forecast.csv")
+    # 5. Retrieve the actual filename
+    selected_filename = forecast_options[selected_display_name]
+    
+    # 6. Load the specific forecast data
+    forecast_path = os.path.join(FORECAST_DIR, selected_filename)
     
     try:
+        # 1. Read CSV. We do NOT use index_col=0 here so we can see all headers.
         df_future = pd.read_csv(forecast_path)
-        df_future.columns = ['date', 'predicted_price', 'lower_bound', 'upper_bound']
-        df_future['date'] = pd.to_datetime(df_future['date'])
         
-        # 5. Load Historical Data for THIS specific group
-        try:
-            parts = selected_forecast_item.split(' | ')
-            condition_filter = parts[0]
-            tier_filter = parts[1]
-        except IndexError:
-            st.error("Data format error in filename.")
-            tier_filter = "Unknown"
-            condition_filter = "Unknown"
+        # 2. Robust Column Renaming Logic
+        rename_map = {}
+        
+        # Standardize column names to lowercase for easier matching (optional, but safer)
+        df_future.columns = [str(c).lower() if isinstance(c, str) else c for c in df_future.columns]
+        
+        # Check and rename columns
+        if 'ds' in df_future.columns:
+            rename_map['ds'] = 'date'
+        
+        if 'yhat' in df_future.columns:
+            rename_map['yhat'] = 'predicted_price'
             
-        # Filter using BOTH columns
-        comm_history = df_laptops[
-            (df_laptops['spec_Etat'] == condition_filter) & 
-            (df_laptops['cpu_tier'] == tier_filter)
-        ].copy()
+        if 'yhat_lower' in df_future.columns:
+            rename_map['yhat_lower'] = 'lower_bound'
+            
+        if 'yhat_upper' in df_future.columns:
+            rename_map['yhat_upper'] = 'upper_bound'
+            
+        # Apply the renaming
+        df_future = df_future.rename(columns=rename_map)
         
-        # Group by month
-        comm_history_monthly = comm_history.groupby(pd.Grouper(key='date', freq='MS'))['price_preview'].mean().reset_index()
-        comm_history_monthly.columns = ['date', 'price']
+        # 3. Validate that we successfully found the expected columns
+        required_columns = ['date', 'predicted_price', 'lower_bound', 'upper_bound']
+        missing_cols = [col for col in required_columns if col not in df_future.columns]
         
-        # Calculate KPIs
-        if not comm_history_monthly.empty and len(df_future) > 0:
-            last_hist_price = comm_history_monthly['price'].iloc[-1]
+        if missing_cols:
+            st.error(f"CSV format error. The file was loaded but is missing expected columns: {missing_cols}")
+            st.write("Detected columns in file:", df_future.columns.tolist())
+            st.write("First 5 rows:", df_future.head())
+        else:
+            # 4. Convert Date column to datetime
+            df_future['date'] = pd.to_datetime(df_future['date'])
+            
+            # =================================================
+            # FORECAST ONLY CALCULATIONS (No Historical Data)
+            # =================================================
+            
+            # 1. Get Prediction Values from the CSV
             next_pred = df_future['predicted_price'].iloc[0]
-            
-            # Avoid division by zero
-            if last_hist_price > 0:
-                pred_change = ((next_pred - last_hist_price) / last_hist_price) * 100
-            else:
-                pred_change = 0
-                
-            # Calculate uncertainty
             avg_uncertainty = (df_future['upper_bound'] - df_future['lower_bound']).mean()
             
-            # Calculate volatility
-            hist_vol = comm_history_monthly['price'].std()
-        else:
-            last_hist_price = avg_price
-            next_pred = avg_price
-            pred_change = 0
+            # 2. Forecast Trend Calculation (First month vs Last month of forecast)
+            # This replaces the "Change vs History" calculation to show direction
+            first_pred = df_future['predicted_price'].iloc[0]
+            last_pred = df_future['predicted_price'].iloc[-1]
+            forecast_trend = ((last_pred - first_pred) / first_pred) * 100 if first_pred > 0 else 0
+
+            # Display KPIs
+            kpi_f1, kpi_f2, kpi_f3 = st.columns(3)
             
-        # Display KPIs
-        kpi_f1, kpi_f2, kpi_f3 = st.columns(3)
-        
-        pred_change_class = 'badge-success' if pred_change >= 0 else 'badge-danger'
-        pred_change_str = f"{'+' if pred_change >= 0 else ''}{pred_change:.1f}%"
-        
-        with kpi_f1:
-            st.markdown(f"""
-                <div class='kpi-card'>
-                    <div class='label'>Next Month Prediction</div>
-                    <div class='big-number' style='color: #2196F3;'>{next_pred:.0f} DZD</div>
-                    <div style='margin-top: 12px;'>
-                        <span class='badge {pred_change_class}'>{pred_change_str}</span>
+            trend_class = 'badge-success' if forecast_trend >= 0 else 'badge-danger'
+            trend_str = f"{'+' if forecast_trend >= 0 else ''}{forecast_trend:.1f}%"
+            
+            with kpi_f1:
+                st.markdown(f"""
+                    <div class='kpi-card'>
+                        <div class='label'>Next Month Prediction</div>
+                        <div class='big-number' style='color: #2196F3;'>{next_pred:,.0f} DZD</div>
+                        <div style='margin-top: 12px;'>
+                            <span class='badge {trend_class}'>{trend_str}</span>
+                        </div>
+                        <div style='font-size: 0.8rem; color: #808080; margin-top: 5px;'>Forecast trend</div>
                     </div>
-                    <div style='font-size: 0.8rem; color: #808080; margin-top: 5px;'>vs last month avg</div>
-                </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-        with kpi_f2:
-            st.markdown(f"""
-                <div class='kpi-card'>
-                    <div class='label'>Avg Uncertainty</div>
-                    <div class='big-number'>±{avg_uncertainty/2:.0f} DZD</div>
-                    <div style='font-size: 0.85rem; color: #808080;'>Width of prediction band</div>
-                </div>
-            """, unsafe_allow_html=True)
+            with kpi_f2:
+                st.markdown(f"""
+                    <div class='kpi-card'>
+                        <div class='label'>Avg Uncertainty</div>
+                        <div class='big-number'>±{avg_uncertainty/2:.0f} DZD</div>
+                        <div style='font-size: 0.85rem; color: #808080;'>Width of prediction band</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            with kpi_f3:
+                forecast_horizon = len(df_future)
+                st.markdown(f"""
+                    <div class='kpi-card'>
+                        <div class='label'>Forecast Duration</div>
+                        <div class='big-number'>{forecast_horizon} Mo</div>
+                        <div style='font-size: 0.85rem; color: #808080;'>Months projected</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            # 7. Plotting (Forecast Only)
+            st.markdown(f"### 📈 Forecast Chart: {selected_display_name}")
+            fig_item_forecast = go.Figure()
             
-        with kpi_f3:
-            st.markdown(f"""
-                <div class='kpi-card'>
-                    <div class='label'>Item Volatility</div>
-                    <div class='big-number'>{hist_vol:.0f}</div>
-                    <div style='font-size: 0.85rem; color: #808080;'>Std Dev (Historical)</div>
-                </div>
-            """, unsafe_allow_html=True)
+            # Trace 1: Forecast (Main Line)
+            fig_item_forecast.add_trace(go.Scatter(
+                x=df_future['date'],
+                y=df_future['predicted_price'],
+                mode='lines+markers',
+                name='Forecast',
+                line=dict(color='#2196F3', width=2, dash='dash'),
+                marker=dict(size=4)
+            ))
+            
+            # Trace 2: Confidence Interval (Filled Area)
+            fig_item_forecast.add_trace(go.Scatter(
+                x=pd.concat([df_future['date'], df_future['date'][::-1]]),
+                y=pd.concat([df_future['upper_bound'], df_future['lower_bound'][::-1]]),
+                fill='toself',
+                fillcolor='rgba(33, 150, 243, 0.2)',
+                line=dict(color='rgba(255,255,255,0)'),
+                name='95% CI',
+                showlegend=True
+            ))
+            
+            # Trace 3: "Today" Line (Start of Forecast)
+            # Calculate Y range based on forecast data only
+            y_vals = list(df_future['upper_bound']) + list(df_future['lower_bound'])
+            
+            if y_vals:
+                min_y = min(y_vals)
+                max_y = max(y_vals)
+                start_date = df_future['date'].iloc[0]
+                
+                fig_item_forecast.add_trace(go.Scatter(
+                    x=[start_date, start_date],
+                    y=[min_y, max_y],
+                    mode='lines',
+                    name='Forecast Start',
+                    line=dict(color='gray', width=1, dash='dot'),
+                    hoverinfo='skip'
+                ))
+                
+                fig_item_forecast.add_annotation(
+                    x=start_date,
+                    y=max_y,
+                    text="Today",
+                    showarrow=False,
+                    yshift=10,
+                    font=dict(color='gray')
+                )
 
-        # 6. Plotting - FIXED: Use datetime objects, not strings
-        st.markdown(f"### 📈 Forecast Chart: {selected_forecast_item}")
-        fig_item_forecast = go.Figure()
-        
-        # Trace 1: Historical
-        fig_item_forecast.add_trace(go.Scatter(
-            x=comm_history_monthly['date'],  # Use datetime directly
-            y=comm_history_monthly['price'],
-            mode='lines+markers',
-            name='Historical',
-            line=dict(color='#4CAF50', width=2),
-            marker=dict(size=4)
-        ))
-        
-        # Trace 2: Forecast
-        fig_item_forecast.add_trace(go.Scatter(
-            x=df_future['date'],  # Use datetime directly
-            y=df_future['predicted_price'],
-            mode='lines+markers',
-            name='Forecast',
-            line=dict(color='#2196F3', width=2, dash='dash'),
-            marker=dict(size=4)
-        ))
-        
-        # Trace 3: Confidence Interval
-        fig_item_forecast.add_trace(go.Scatter(
-            x=pd.concat([df_future['date'], df_future['date'][::-1]]),
-            y=pd.concat([df_future['upper_bound'], df_future['lower_bound'][::-1]]),
-            fill='toself',
-            fillcolor='rgba(33, 150, 243, 0.2)',
-            line=dict(color='rgba(255,255,255,0)'),
-            name='95% CI',
-            showlegend=True
-        ))
-        
-        # Trace 4: "Today" Line
-        last_date = comm_history_monthly['date'].iloc[-1]
-        all_y_values = list(comm_history_monthly['price']) + list(df_future['upper_bound']) + list(df_future['lower_bound'])
-        min_y = min(all_y_values)
-        max_y = max(all_y_values)
-        
-        fig_item_forecast.add_trace(go.Scatter(
-            x=[last_date, last_date],
-            y=[min_y, max_y],
-            mode='lines',
-            name='Today',
-            line=dict(color='gray', width=1, dash='dot'),
-            hoverinfo='skip'
-        ))
-        
-        fig_item_forecast.add_annotation(
-            x=last_date,
-            y=max_y,
-            text="Today",
-            showarrow=False,
-            yshift=10,
-            font=dict(color='gray')
-        )
+            fig_item_forecast.update_layout(
+                template='plotly_dark',
+                paper_bgcolor='#1a1a1a',
+                plot_bgcolor='#262626',
+                font=dict(color='#FAFAFA'),
+                xaxis_title="Date",
+                yaxis_title="Price (DZD)",
+                height=500,
+                margin=dict(l=20, r=20, t=40, b=20),
+                legend=dict(x=0.01, y=0.99),
+                xaxis=dict(type='date')
+            )
+            st.plotly_chart(fig_item_forecast, use_container_width=True)
 
-        fig_item_forecast.update_layout(
-            template='plotly_dark',
-            paper_bgcolor='#1a1a1a',
-            plot_bgcolor='#262626',
-            font=dict(color='#FAFAFA'),
-            xaxis_title="Date",
-            yaxis_title="Price (DZD)",
-            height=500,
-            margin=dict(l=20, r=20, t=40, b=20),
-            legend=dict(x=0.01, y=0.99),
-            xaxis=dict(type='date')  # Explicitly set type
-        )
-        st.plotly_chart(fig_item_forecast, use_container_width=True)
-
-        with st.expander(f"View Raw Forecast Data for {selected_forecast_item}"):
-            st.dataframe(df_future)
+            with st.expander(f"View Raw Forecast Data for {selected_display_name}"):
+                st.dataframe(df_future)
 
     except Exception as e:
-        st.error(f"Error loading forecast for {selected_forecast_item}: {e}")
+        import traceback
+        st.error(f"Error loading forecast for {selected_display_name}: {e}")
+        st.error(traceback.format_exc()) # Show detailed error in console if needed
+
 
 else:
     st.info("⚠️ Forecast folder not found or no data loaded. Please run the forecasting script first.")
@@ -837,6 +884,157 @@ market_data_ai = {
     'top_ram': avg_ram
 }
 
+st.markdown("---")
+
+# ============== Trend Anomaly Detection ==============
+st.markdown("### ⚠️ Trend Anomaly Detection")
+st.markdown("<div style='color: #808080; margin-bottom: 16px;'>Identifying months with abnormal price movements compared to the market trend</div>", unsafe_allow_html=True)
+
+# Prepare Data: Aggregate by Month to see the Trend
+df_trend = df_filtered.copy().set_index('created_at')
+
+# Resample by Month Start (MS) to get average price per month
+# This smooths out noise from individual listings
+monthly_trend = df_trend['price_preview'].resample('MS').mean().dropna()
+df_trend_data = monthly_trend.reset_index()
+df_trend_data.columns = ['date', 'avg_price']
+
+# Check if we have enough data (at least 4 months) to calculate a trend
+if len(df_trend_data) >= 4:
+    # Calculate Rolling Statistics to define the "Normal" Trend
+    window = 3 # Compare current month to average of previous 3 months
+    df_trend_data['trend_line'] = df_trend_data['avg_price'].rolling(window=window, center=True).mean()
+    df_trend_data['trend_std'] = df_trend_data['avg_price'].rolling(window=window, center=True).std()
+    
+    # Calculate Z-Score: How far is this month from the trend?
+    df_trend_data['z_score'] = (df_trend_data['avg_price'] - df_trend_data['trend_line']) / df_trend_data['trend_std']
+    
+    # Identify Anomalies (Z-score > 1.5 indicates a significant deviation from trend)
+    # We drop NaNs created by the rolling window
+    df_anomalies = df_trend_data.dropna(subset=['z_score'])
+    trend_anomalies = df_anomalies[df_anomalies['z_score'].abs() > 1.5].sort_values('date', ascending=False)
+
+    # ============== Visualization ==============
+    fig_trend_anomaly = go.Figure()
+
+    # 1. Plot the Trend Line (Moving Average)
+    fig_trend_anomaly.add_trace(go.Scatter(
+        x=df_trend_data['date'],
+        y=df_trend_data['trend_line'],
+        mode='lines',
+        name='Expected Trend (3-Month Avg)',
+        line=dict(color='#808080', width=2, dash='dot'),
+    ))
+
+    # 2. Plot Actual Monthly Prices (Color coded by anomaly status)
+    normal_mask = df_trend_data['z_score'].abs() <= 1.5
+    
+    # Normal Points
+    fig_trend_anomaly.add_trace(go.Scatter(
+        x=df_trend_data[normal_mask]['date'],
+        y=df_trend_data[normal_mask]['avg_price'],
+        mode='markers+lines',
+        name='Normal Prices',
+        line=dict(color='#2196F3', width=1),
+        marker=dict(size=8, color='#2196F3')
+    ))
+    
+    # Anomaly Points
+    if not trend_anomalies.empty:
+        fig_trend_anomaly.add_trace(go.Scatter(
+            x=trend_anomalies['date'],
+            y=trend_anomalies['avg_price'],
+            mode='markers',
+            name='Anomaly Detected',
+            marker=dict(
+                size=12, 
+                color=trend_anomalies['z_score'].apply(lambda x: '#EF5350' if x > 0 else '#66BB6A'), # Red for high, Green for low
+                line=dict(color='white', width=2)
+            ),
+            text=trend_anomalies['date'].dt.strftime('%b %Y'),
+            hovertemplate='<b>%{text}</b><br>Price: %{y:,.0f} DZD<extra>Anomaly</extra>'
+        ))
+
+    fig_trend_anomaly.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='#1a1a1a',
+        plot_bgcolor='#262626',
+        font=dict(color='#FAFAFA'),
+        xaxis_title="Date",
+        yaxis_title="Average Price (DZD)",
+        height=400,
+        margin=dict(l=20, r=20, t=20, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(fig_trend_anomaly, use_container_width=True)
+
+    # ============== Text Details ==============
+    if not trend_anomalies.empty:
+        st.markdown("#### 🔎 Detected Anomalies")
+        for _, row in trend_anomalies.head(3).iterrows():
+            # Calculate deviation from trend
+            deviation = ((row['avg_price'] - row['trend_line']) / row['trend_line']) * 100
+            
+            # Styling
+            color = "badge-danger" if row['z_score'] > 0 else "badge-success" # Red = Price Spike
+            icon = "📈" if row['z_score'] > 0 else "📉"
+            period_str = row['date'].strftime('%B %Y')
+            
+            st.markdown(f"""
+                <div class='insight-card' style='border-left-color: #FF9800;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div>
+                            <div style='font-size: 1.1rem; margin-bottom: 4px;'>{icon} <strong>{period_str}</strong></div>
+                            <div style='font-size: 0.85rem; color: #808080;'>
+                                Avg Price: {row['avg_price']:,.0f} DZD vs Trend: {row['trend_line']:,.0f} DZD
+                            </div>
+                        </div>
+                        <span class='badge {color}' style='font-size: 1rem;'>{deviation:+.1f}%</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("✅ No significant trend anomalies detected. Prices are following the expected 3-month moving average.")
+
+else:
+    st.info("ℹ️ Not enough historical data available (less than 4 months) to calculate trend anomalies.")
+
+st.markdown("---")
+
+# Condition vs Price Analysis
+st.markdown("### 📊 Condition Impact on Pricing")
+
+
+df_filtered['standardized_condition'] = df_filtered['spec_Etat']
+
+# Use standardized labels for the bar chart
+condition_avg = df_filtered.groupby('standardized_condition')['price_preview'].mean().sort_values(ascending=False)
+
+fig_condition = go.Figure()
+fig_condition.add_trace(go.Bar(
+    x=condition_avg.index,
+    y=condition_avg.values,
+    marker=dict(
+        color=['#4CAF50', '#66BB6A', '#81C784', '#A5D6A7', '#BDBDBD'],
+        line=dict(color='#FAFAFA', width=1)
+    ),
+    text=[f"{v/1000:.0f}K" for v in condition_avg.values],
+    textposition='outside'
+))
+
+fig_condition.update_layout(
+    template='plotly_dark',
+    paper_bgcolor='#1a1a1a',
+    plot_bgcolor='#262626',
+    font=dict(color='#FAFAFA'),
+    xaxis_title="Standardized Condition",
+    yaxis_title="Average Price (DZD)",
+    height=400,
+    margin=dict(l=20, r=20, t=20, b=20)
+)
+st.plotly_chart(fig_condition, use_container_width=True)
+
+st.markdown("---")
 # AI Insights Button
 if st.button("🚀 Generate AI Insights", type="primary", use_container_width=True):
     with st.spinner("🤖 AI is analyzing laptop market data..."):
@@ -877,81 +1075,6 @@ if st.button("🚀 Generate AI Insights", type="primary", use_container_width=Tr
             """, unsafe_allow_html=True)
             
             st.markdown("<div style='margin-top: 12px; color: #808080; font-size: 0.85rem;'>💡 Powered by Grok AI | Insights based on real-time market data</div>", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# Condition vs Price Analysis
-st.markdown("### 📊 Condition Impact on Pricing")
-
-
-df_filtered['standardized_condition'] = df_filtered['spec_Etat']
-
-condition_col1, condition_col2 = st.columns(2)
-
-with condition_col1:
-    # Use standardized labels for the bar chart
-    condition_avg = df_filtered.groupby('standardized_condition')['price_preview'].mean().sort_values(ascending=False)
-    
-    fig_condition = go.Figure()
-    fig_condition.add_trace(go.Bar(
-        x=condition_avg.index,
-        y=condition_avg.values,
-        marker=dict(
-            color=['#4CAF50', '#66BB6A', '#81C784', '#A5D6A7', '#BDBDBD'],
-            line=dict(color='#FAFAFA', width=1)
-        ),
-        text=[f"{v/1000:.0f}K" for v in condition_avg.values],
-        textposition='outside'
-    ))
-    
-    fig_condition.update_layout(
-        template='plotly_dark',
-        paper_bgcolor='#1a1a1a',
-        plot_bgcolor='#262626',
-        font=dict(color='#FAFAFA'),
-        xaxis_title="Standardized Condition",
-        yaxis_title="Average Price (DZD)",
-        height=400,
-        margin=dict(l=20, r=20, t=20, b=20)
-    )
-    st.plotly_chart(fig_condition, use_container_width=True)
-
-with condition_col2:
-    # Logic for Depreciation Analysis using standardized labels
-    new_price = df_filtered[df_filtered['standardized_condition'] == 'NEW (JAMAIS UTILISÉ)']['price_preview'].mean()
-    depreciation_data = []
-    
-    # Define the order of depreciation to check
-    target_conditions = ['NEW (JAMAIS UTILISÉ)', 'AS NEW', 'VERY GOOD', 'GOOD']
-    
-    for condition in target_conditions:
-        cond_df = df_filtered[df_filtered['standardized_condition'] == condition]
-        if not cond_df.empty:
-            cond_price = cond_df['price_preview'].mean()
-            # Calculate % drop from the "New" price
-            depreciation = ((new_price - cond_price) / new_price * 100) if new_price and new_price > 0 else 0
-            depreciation_data.append({
-                'Condition': condition,
-                'Depreciation': depreciation,
-                'Count': len(cond_df)
-            })
-    
-    st.markdown("<div class='label'>Depreciation Analysis (vs New)</div>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    if not depreciation_data:
-        st.info("Not enough data to calculate depreciation.")
-    else:
-        for item in depreciation_data:
-            st.markdown(f"""
-                <div style='padding: 12px 0; border-bottom: 1px solid #3a3a3a;'>
-                    <div style='display: flex; justify-content: space-between; margin-bottom: 4px;'>
-                        <span style='font-weight: 600;'>{item['Condition']}</span>
-                        <span class='badge badge-warning'>-{item['Depreciation']:.1f}%</span>
-                    </div>
-                    <div style='font-size: 0.85rem; color: #808080;'>{item['Count']} listings found</div>
-                </div>
-            """, unsafe_allow_html=True)
 
 st.markdown("---")
 
