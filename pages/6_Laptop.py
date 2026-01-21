@@ -653,7 +653,7 @@ context = f"""
 """
 
 def get_ai_insights(context):
-    api_key = "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"
+    api_key = st.secrets["grok"]["api_key"]
     try:
         response = requests.post(
             'https://api.groq.com/openai/v1/chat/completions',
