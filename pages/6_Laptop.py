@@ -90,7 +90,7 @@ def load_laptops():
         csv_path = os.path.join(script_dir, 'kaggle_laptop_data.csv')
         
         if not os.path.exists(csv_path):
-            csv_path = '/home/lylia/Documents/SIC-samsung/training-food/ui-interface/kaggle_laptop_data.csv'
+            csv_path = 'kaggle_laptop_data.csv'
 
         # Create dummy data if file missing for demo purposes (remove this block in production)
         if not os.path.exists(csv_path):
