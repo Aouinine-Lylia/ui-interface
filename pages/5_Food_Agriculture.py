@@ -17,6 +17,18 @@ st.set_page_config(
     layout="wide"
 )
 
+# Algerian Wilayas List for Dropdown
+ALGERIAN_WILAYAS_LIST = [
+    "Adrar", "Chlef", "Laghouat", "Oum El Bouaghi", "Batna", "Béjaïa", "Biskra", "Béchar", 
+    "Blida", "Bouira", "Tamanrasset", "Tébessa", "Tlemcen", "Tiaret", "Tizi Ouzou", "Alger", 
+    "Djelfa", "Jijel", "Sétif", "Saïda", "Skikda", "Sidi Bel Abbès", "Annaba", "Guelma", 
+    "Constantine", "Médéa", "Mostaganem", "Msila", "Mascara", "Ouargla", "Oran", "El Bayadh", 
+    "Illizi", "Bordj Bou Arreridj", "Boumerdès", "El Tarf", "Tindouf", "Tissemsilt", "El Oued", 
+    "Khenchela", "Souk Ahras", "Tipaza", "Mila", "Aïn Defla", "Naâma", "Aïn Témouchent", 
+    "Ghardaïa", "Relizane", "Timimoun", "Bordj Badji Mokhtar", "Ouled Djellal", "Béni Abbès", 
+    "In Salah", "In Guezzam", "Touggourt", "Djanet", "El M'Ghair", "El Meniaa"
+]
+
 # Dark theme CSS
 st.markdown("""
     <style>
@@ -37,8 +49,7 @@ st.markdown("""
         background-color: #262626;
         padding: 20px;
         border-radius: 12px;
-        border: 1px solid #3a3a3a;
-        border-left: 4px solid #4CAF50;
+        border: 1px solid #4CAF50;
         margin-bottom: 16px;
     }
     .badge {
@@ -48,47 +59,120 @@ st.markdown("""
         font-size: 0.85rem;
         font-weight: 600;
     }
-    .badge-success {
-        background-color: rgba(76, 175, 80, 0.2);
-        color: #66BB6A;
+    .badge-success { background-color: rgba(76, 175, 80, 0.2); color: #66BB6A; }
+    .badge-danger { background-color: rgba(244, 67, 54, 0.2); color: #EF5350; }
+    .badge-warning { background-color: rgba(255, 152, 0, 0.2); color: #FFA726; }
+    .badge-info { background-color: rgba(33, 150, 243, 0.2); color: #42A5F5; }
+    .big-number { font-size: 2.5rem; font-weight: bold; color: #FAFAFA; margin: 8px 0; }
+    .label { font-size: 0.9rem; color: #808080; text-transform: uppercase; letter-spacing: 0.5px; }
+    .watermelon-icon { font-size: 2rem; margin-right: 12px; }
+    .app-title { font-size: 1.8rem; font-weight: bold; color: #FAFAFA; margin: 0; }
+    .app-subtitle { font-size: 0.95rem; color: #808080; margin: 0; }
+
+    /* Enhanced Confidence Bar */
+    .confidence-bar-container {
+        margin-top: 8px;
+        height: 8px;
+        background: #3a3a3a;
+        border-radius: 4px;
+        overflow: hidden;
     }
-    .badge-danger {
-        background-color: rgba(244, 67, 54, 0.2);
-        color: #EF5350;
+    .confidence-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #4CAF50, #66BB6A);
+        border-radius: 4px;
+        transition: width 0.5s ease-in-out;
     }
-    .badge-warning {
-        background-color: rgba(255, 152, 0, 0.2);
-        color: #FFA726;
+    
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 15px;
+        background: #121212;
+        padding: 12px;
+        border-radius: 8px;
     }
-    .big-number {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #FAFAFA;
-        margin: 8px 0;
+    .stat-item {
+        display: flex;
+        flex-direction: column;
     }
-    .label {
-        font-size: 0.9rem;
+    .stat-label {
+        font-size: 0.75rem;
         color: #808080;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        margin-bottom: 4px;
     }
-    .watermelon-icon {
-        font-size: 2rem;
-        margin-right: 12px;
-    }
-    .app-title {
-        font-size: 1.8rem;
+    .stat-value {
+        font-size: 1.1rem;
         font-weight: bold;
         color: #FAFAFA;
-        margin: 0;
-    }
-    .app-subtitle {
-        font-size: 0.95rem;
-        color: #808080;
-        margin: 0;
     }
     </style>
 """, unsafe_allow_html=True)
+
+# Wilaya to lat/lon mapping
+ALGERIAN_WILAYAS_COORDS = {
+    "Adrar": {"lat": 27.88, "lon": -0.28},
+    "Chlef": {"lat": 36.16, "lon": 1.33},
+    "Laghouat": {"lat": 33.80, "lon": 2.88},
+    "Oum El Bouaghi": {"lat": 35.86, "lon": 7.11},
+    "Batna": {"lat": 35.55, "lon": 6.17},
+    "Béjaïa": {"lat": 36.75, "lon": 5.06},
+    "Biskra": {"lat": 34.85, "lon": 5.73},
+    "Béchar": {"lat": 31.61, "lon": -2.22},
+    "Blida": {"lat": 36.47, "lon": 2.83},
+    "Bouira": {"lat": 36.37, "lon": 3.90},
+    "Tamanrasset": {"lat": 22.78, "lon": 5.52},
+    "Tébessa": {"lat": 35.40, "lon": 8.12},
+    "Tlemcen": {"lat": 34.88, "lon": -1.31},
+    "Tiaret": {"lat": 35.37, "lon": 1.32},
+    "Tizi Ouzou": {"lat": 36.70, "lon": 4.05},
+    "Alger": {"lat": 36.75, "lon": 3.04},
+    "Djelfa": {"lat": 34.67, "lon": 3.26},
+    "Jijel": {"lat": 36.80, "lon": 5.76},
+    "Sétif": {"lat": 36.19, "lon": 5.41},
+    "Saïda": {"lat": 34.83, "lon": 0.14},
+    "Skikda": {"lat": 36.87, "lon": 6.91},
+    "Sidi Bel Abbès": {"lat": 35.19, "lon": -0.64},
+    "Annaba": {"lat": 36.89, "lon": 7.76},
+    "Guelma": {"lat": 36.46, "lon": 7.43},
+    "Constantine": {"lat": 36.36, "lon": 6.61},
+    "Médéa": {"lat": 36.26, "lon": 2.75},
+    "Mostaganem": {"lat": 35.93, "lon": 0.09},
+    "Msila": {"lat": 35.70, "lon": 4.54},
+    "Mascara": {"lat": 35.39, "lon": 0.14},
+    "Ouargla": {"lat": 31.95, "lon": 5.32},
+    "Oran": {"lat": 35.69, "lon": -0.64},
+    "El Bayadh": {"lat": 33.68, "lon": 1.01},
+    "Illizi": {"lat": 26.49, "lon": 8.44},
+    "Bordj Bou Arreridj": {"lat": 36.07, "lon": 4.76},
+    "Boumerdès": {"lat": 36.75, "lon": 3.47},
+    "El Tarf": {"lat": 36.77, "lon": 8.30},
+    "Tindouf": {"lat": 27.67, "lon": -8.14},
+    "Tissemsilt": {"lat": 35.60, "lon": 1.81},
+    "El Oued": {"lat": 33.35, "lon": 6.86},
+    "Khenchela": {"lat": 35.42, "lon": 7.14},
+    "Souk Ahras": {"lat": 36.28, "lon": 7.95},
+    "Tipaza": {"lat": 36.58, "lon": 2.45},
+    "Mila": {"lat": 36.45, "lon": 6.26},
+    "Aïn Defla": {"lat": 36.25, "lon": 1.95},
+    "Naâma": {"lat": 33.26, "lon": -0.31},
+    "Aïn Témouchent": {"lat": 35.30, "lon": -1.14},
+    "Ghardaïa": {"lat": 32.49, "lon": 3.67},
+    "Relizane": {"lat": 35.93, "lon": 0.55},
+    "Timimoun": {"lat": 29.25, "lon": 0.25},
+    "Bordj Badji Mokhtar": {"lat": 21.33, "lon": 0.95},
+    "Ouled Djellal": {"lat": 34.52, "lon": 4.72},
+    "Béni Abbès": {"lat": 30.13, "lon": -2.16},
+    "In Salah": {"lat": 27.20, "lon": 2.47},
+    "In Guezzam": {"lat": 23.00, "lon": 5.70},
+    "Touggourt": {"lat": 33.10, "lon": 6.06},
+    "Djanet": {"lat": 24.55, "lon": 9.47},
+    "El M'Ghair": {"lat": 33.30, "lon": 6.30},
+    "El Meniaa": {"lat": 30.58, "lon": 2.91}
+}
 
 # ============== Sidebar Navigation ==============
 with st.sidebar:
@@ -122,27 +206,21 @@ def load_food_data():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
     
-    # Main Price data
     try:
         df_prices = pd.read_csv(os.path.join(parent_dir, 'wfp_food_prices_dza.csv'))
         df_prices['date'] = pd.to_datetime(df_prices['date'])
-        
-        # Basic data cleaning
-        # Ensure numeric prices
         df_prices['price'] = pd.to_numeric(df_prices['price'], errors='coerce')
         df_prices = df_prices.dropna(subset=['price', 'date'])
     except Exception as e:
         st.error(f"Error loading main data: {e}")
         return pd.DataFrame(), None, None, None, {}
     
-    # Enhanced data (Optional)
     try:
         df_enhanced = pd.read_csv(os.path.join(os.path.dirname(parent_dir), 'prophet_data_enhanced.csv'))
         df_enhanced['ds'] = pd.to_datetime(df_enhanced['ds'])
     except:
         df_enhanced = None
     
-    # Forecast data (Optional)
     try:
         df_forecast = pd.read_csv(os.path.join(os.path.dirname(parent_dir), 'outputs/forecast_full.csv'))
         df_forecast['date'] = pd.to_datetime(df_forecast['date'])
@@ -155,10 +233,8 @@ def load_food_data():
     except:
         df_future = None
     
-    # Load category data
     category_data = {}
     try:
-        # Simply grouping main data by commodity if separate files don't exist
         top_commodities = df_prices['commodity'].value_counts().head(6).index.tolist()
         for comm in top_commodities:
             category_data[comm] = df_prices[df_prices['commodity'] == comm].copy()
@@ -182,16 +258,147 @@ with col1:
     st.markdown("### Detailed analytics and predictions for food & agriculture products")
 with col2:
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Refresh Data", use_container_width=True, type="primary"):
-        st.cache_data.clear()
-        st.rerun()
+    if 'show_food_predict_form' not in st.session_state:
+        st.session_state.show_food_predict_form = False
+    if st.button("🔮 Predict Food Price", use_container_width=True, type="primary"):
+        st.session_state.show_food_predict_form = True
+
+# ============== FIXED PREDICTION FORM ==============
+if st.session_state.get('show_food_predict_form'):
+    with st.expander("🥕 Food Specification Input", expanded=True):
+        with st.form("food_predict_form"):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                commodity = st.text_input("Commodity", value="Tomatoes")
+                category = st.selectbox("Category", [
+                    "cereals and tubers", "meat, fish and eggs", "milk and dairy",
+                    "miscellaneous food", "non-food", "oil and fats", "pulses and nuts",
+                    "vegetables and fruits"
+                ], index=7)
+                price_per_kg = st.number_input("Price per kg (DZD)", min_value=0.0, value=200.0, step=1.0)
+            
+            with col_b:
+                wilaya = st.selectbox("Wilaya", options=ALGERIAN_WILAYAS_LIST, index=15)
+            
+            submit = st.form_submit_button("Predict Price Classification", use_container_width=True)
+
+        if submit:
+            # Get coordinates
+            lat = ALGERIAN_WILAYAS_COORDS[wilaya]["lat"]
+            lon = ALGERIAN_WILAYAS_COORDS[wilaya]["lon"]
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            payload = {
+                "commodity": commodity,
+                "category": category,
+                "price_per_kg": price_per_kg,
+                "date": today,
+                "latitude": lat,
+                "longitude": lon
+            }
+            
+            try:
+                api_url = "http://localhost:5000/predict-food"
+                
+                with st.spinner("🔄 Analyzing price data..."):
+                    res = requests.post(api_url, json=payload, timeout=10)
+                
+                if res.status_code == 200:
+                    result = res.json()
+                    
+                    # Extract data
+                    prediction_label = result.get('prediction', 'Unknown')
+                    confidence_score = result.get('confidence', 0.0)
+                    deviation_pct = result.get('price_deviation_percentage', 0.0)
+                    historical_mean = result.get('historical_mean', 0.0)
+                    
+                    # Determine styling based on prediction
+                    if prediction_label == 'CHEAP':
+                        badge_class = 'badge-success'
+                        status_text = "Great Deal"
+                        status_desc = "Underpriced compared to historical average"
+                        icon = "🟢"
+                        deviation_color = "#66BB6A"
+                    elif prediction_label == 'NORMAL':
+                        badge_class = 'badge-info'
+                        status_text = "Fair Market Value"
+                        status_desc = "Matches historical average closely"
+                        icon = "⚖️"
+                        deviation_color = "#42A5F5"
+                    elif prediction_label == 'EXPENSIVE':
+                        badge_class = 'badge-danger'
+                        status_text = "Overpriced"
+                        status_desc = "Significantly higher than historical average"
+                        icon = "🔴"
+                        deviation_color = "#EF5350"
+                    else:
+                        badge_class = 'badge-warning'
+                        status_text = "Unknown"
+                        status_desc = "Unable to classify price"
+                        icon = "❓"
+                        deviation_color = "#B0B0B0"
+
+                    confidence_width = f"{confidence_score * 100:.1f}%"
+                    
+                    # Render results
+                    st.markdown(f"""
+                        <div class='insight-card'>
+                            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;'>
+                                <h3 style='margin:0; color: #4CAF50; display: flex; align-items: center; gap: 8px;'>
+                                    {icon} AI Price Analysis
+                                </h3>
+                                <span class='badge {badge_class}'>{status_text}</span>
+                            </div>
+
+                            <div style='display: flex; align-items: baseline; margin-bottom: 15px;'>
+                                <span style='font-size: 1.2rem; color: #B0B0B0; margin-right: 10px;'>Your Input:</span>
+                                <span style='font-size: 2.5rem; font-weight: bold; color: #FAFAFA;'>{price_per_kg:.0f} DZD</span>
+                            </div>
+
+                            <div style='font-size: 0.9rem; color: #B0B0B0; margin-bottom: 20px; line-height: 1.4;'>
+                                {status_desc} for <strong>{commodity}</strong> in <strong>{wilaya}</strong>.
+                            </div>
+                            
+                            <div style='margin-bottom: 20px;'>
+                                <div style='display: flex; justify-content: space-between; margin-bottom: 4px;'>
+                                    <span class='label'>Model Confidence</span>
+                                    <span style='font-weight: bold; color: #4CAF50;'>{confidence_width}</span>
+                                </div>
+                                <div class='confidence-bar-container'>
+                                    <div class='confidence-bar-fill' style='width: {confidence_width};'></div>
+                                </div>
+                            </div>
+
+                            <div class='stats-grid'>
+                                <div class='stat-item'>
+                                    <span class='stat-label'>Price Deviation</span>
+                                    <span class='stat-value' style='color: {deviation_color};'>
+                                        {deviation_pct:+.1f}%
+                                    </span>
+                                </div>
+                                <div class='stat-item'>
+                                    <span class='stat-label'>Historical Mean</span>
+                                    <span class='stat-value'>{historical_mean:.0f} DZD</span>
+                                </div>
+                            </div>
+                        </div> 
+                    """, unsafe_allow_html=True)
+                    
+                else:
+                    st.error(f"❌ API Error: {res.status_code} - {res.text}")
+                    
+            except requests.exceptions.Timeout:
+                st.error("⏱️ Request timed out. Please check if the API server is running.")
+            except requests.exceptions.ConnectionError:
+                st.error("🔌 Connection error. Make sure the API is running at http://localhost:5000")
+            except Exception as e:
+                st.error(f"❌ Unexpected error: {str(e)}")
 
 st.markdown("---")
 
-# ============== Filters (Logical) ==============
+# ============== Filters ==============
 st.markdown("### 🔍 Data Filters")
 
-# Create logical filters based on actual data columns
 all_commodities = sorted(df_prices['commodity'].unique().tolist())
 all_regions = sorted(df_prices['admin1'].unique().tolist()) if 'admin1' in df_prices.columns else []
 
@@ -206,19 +413,16 @@ with col_filter2:
     else:
         selected_regions = []
 
-# Apply filters
 df_filtered = df_prices.copy()
 if selected_commodities:
     df_filtered = df_filtered[df_filtered['commodity'].isin(selected_commodities)]
 if selected_regions:
     df_filtered = df_filtered[df_filtered['admin1'].isin(selected_regions)]
 
-# Date range filtering (Default to last 2 years for better chart visibility)
 min_date = df_filtered['date'].min()
 max_date = df_filtered['date'].max()
 
 with col_date:
-    # Default to full dataset
     default_start = min_date
     date_range = st.date_input("Date Range", [default_start, max_date])
 
@@ -230,17 +434,9 @@ if df_filtered.empty:
     st.warning("No data matches your filters. Adjust selections.")
     st.stop()
 
-# ============== KPI Calculation (Dynamic) ==============
-# Sort by date for accurate calc
+# ============== KPI Calculation ==============
 df_filtered = df_filtered.sort_values('date')
-
-# 1. Average Price
 avg_price = df_filtered['price'].mean()
-
-# 2. Price Change (Current window vs Previous window of same length)
-current_window_days = (df_filtered['date'].max() - df_filtered['date'].min()).days
-if current_window_days < 30: current_window_days = 30 # fallback
-
 max_d = df_filtered['date'].max()
 last_period = df_filtered[df_filtered['date'] >= (max_d - timedelta(days=30))]
 prev_period = df_filtered[(df_filtered['date'] >= (max_d - timedelta(days=60))) & 
@@ -251,27 +447,21 @@ if not prev_period.empty and not last_period.empty:
     prev_mean = prev_period['price'].mean()
     price_change = ((curr_mean - prev_mean) / prev_mean) * 100
     price_change_str = f"{'+' if price_change >= 0 else ''}{price_change:.1f}%"
-    price_change_class = 'badge-success' if price_change >= 0 else 'badge-danger' # Higher price usually bad for consumer, good for seller. keeping generic color.
+    price_change_class = 'badge-success' if price_change >= 0 else 'badge-danger'
 else:
     price_change_str = "N/A"
     price_change_class = 'badge-warning'
 
-# 3. Volatility (Coefficient of Variation)
 price_std = df_filtered['price'].std()
 volatility_coef = (price_std / avg_price) * 100 if avg_price > 0 else 0
 vol_str = f"{volatility_coef:.1f}%"
 
-# 4. Confidence Score (Calculated based on data density and volatility)
-# Lower volatility + Higher sample size = Higher confidence
-sample_size_score = min(len(df_filtered) / 100, 1.0) * 50 # Max 50 points for data amount
-volatility_score = max(0, 50 - volatility_coef) # Max 50 points for stability
-confidence = sample_size_score + volatility_score
-confidence = min(max(confidence, 10.0), 99.0) # Clamp 10-99%
+sample_size_score = min(len(df_filtered) / 100, 1.0) * 50
+volatility_score = max(0, 50 - volatility_coef)
+confidence = min(max(sample_size_score + volatility_score, 10.0), 99.0)
 
-# 5. Active listings
 active_listings = len(df_filtered)
 
-# KPI Display
 st.markdown("### 📊 Key Metrics")
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
@@ -323,8 +513,6 @@ with kpi4:
             <div style='font-size: 0.85rem; color: #808080;'>Across {df_filtered['market'].nunique()} markets</div>
         </div>
     """, unsafe_allow_html=True)
-
-st.markdown("---")
 
 # ============== Charts Section ==============
 col1, col2 = st.columns(2)
@@ -476,49 +664,6 @@ if len(df_filtered) > 1:
 else:
     trend_str = "0%"
 
-# Layout for Prediction & Drivers
-st.markdown("### 🔮 Price Prediction (Next 30 Days)")
-pred_col1, pred_col2, pred_col3 = st.columns(3)
-
-with pred_col1:
-    st.markdown(f"""
-        <div class='kpi-card'>
-            <div class='label'>Predicted Trend</div>
-            <div class='big-number' style='font-size: 2rem;'>{pred_price:.0f} DZD</div>
-            <div style='margin-top: 12px;'>
-                <span class='badge {pred_change_class}'>{pred_change_str}</span>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-with pred_col2:
-    st.markdown(f"""
-        <div class='kpi-card'>
-            <div class='label'>Forecast Range</div>
-            <div style='font-size: 1.8rem; font-weight: bold; color: #FAFAFA; margin: 8px 0;'>
-                {lower_bound_val:.0f} - {upper_bound_val:.0f}
-            </div>
-            <div style='font-size: 0.85rem; color: #808080;'>Based on historical volatility</div>
-        </div>
-    """, unsafe_allow_html=True)
-
-with pred_col3:
-    st.markdown(f"""
-        <div class='kpi-card'>
-            <div class='label'>Key Drivers</div>
-            <div style='margin-top: 10px; font-size: 0.9rem;'>
-                <div style='display:flex; justify-content:space-between; margin-bottom:4px;'>
-                    <span>📅 Seasonality:</span><span style='color:#FAFAFA'>{seasonality_impact}</span>
-                </div>
-                <div style='display:flex; justify-content:space-between; margin-bottom:4px;'>
-                    <span>🌍 Reg. Variance:</span><span style='color:#FAFAFA'>{comp_str}</span>
-                </div>
-                <div style='display:flex; justify-content:space-between;'>
-                    <span>📈 Overall Trend:</span><span style='color:#FAFAFA'>{trend_str}</span>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
 
 # ============== New Forecast Logic (Individual Item Selection) ==============
 
@@ -711,48 +856,123 @@ if os.path.exists(FORECAST_DIR):
         st.error(f"Error loading forecast for {selected_forecast_item}: {e}")
 else:
     st.info("⚠️ Forecast folder not found. Please run the forecasting script first.")
-    # ============== Anomaly Detection (Statistical) ==============
-st.markdown("### ⚠️ Anomaly Detection")
-
-# Detect anomalies using Z-Score on the filtered dataset
-anomalies = []
-df_anomaly = df_filtered.copy()
-df_anomaly['mean_price'] = df_anomaly['price'].rolling(window=30, center=True).mean()
-df_anomaly['std_price'] = df_anomaly['price'].rolling(window=30, center=True).std()
-df_anomaly['z_score'] = (df_anomaly['price'] - df_anomaly['mean_price']) / df_anomaly['std_price']
-
-# Filter for recent anomalies (last 60 days)
-recent_anomalies = df_anomaly[
-(df_anomaly['date'] > (df_anomaly['date'].max() - timedelta(days=60))) &
-(df_anomaly['z_score'].abs() > 2) # Z-score > 2 implies < 5% probability
-].sort_values('date', ascending=False)
-
-if not recent_anomalies.empty:
-    for _, row in recent_anomalies.head(3).iterrows():
-        change_pct = ((row['price'] - row['mean_price']) / row['mean_price']) * 100
-        severity = "High" if abs(row['z_score']) > 3 else "Medium"
-        color = "badge-danger" if change_pct > 0 else "badge-success" # High price red, low price green (buyer perspective)
-        icon = "📈" if change_pct > 0 else "📉"
-        st.markdown(f"""
-        <div class='insight-card'>
-        <div style='display: flex; justify-content: space-between; align-items: start;'>
-        <div style='flex: 1;'>
-        <div style='font-size: 1.1rem; margin-bottom: 8px;'>{icon} Unusual Price Detected in {row['market']}</div>
-        <div style='font-size: 0.85rem; color: #808080;'>
-        Date: {row['date'].strftime('%Y-%m-%d')} | Severity: {severity} | Region: {row['admin1']}
-        </div>
-        </div>
-        <div>
-        <span class='badge {color}' style='font-size: 1rem;'>{change_pct:+.1f}% vs 30d Avg</span>
-        </div>
-        </div>
-        </div>
-        """, unsafe_allow_html=True)
-else:
-    st.info("✅ No significant statistical anomalies detected in the last 60 days for selected data.")
-
 st.markdown("---")
 
+# ============== Trend Anomaly Detection ==============
+st.markdown("### ⚠️ Market Trend Anomalies")
+st.markdown("<div style='color: #808080; margin-bottom: 16px;'>Identifying months where prices deviated significantly from the expected market trend</div>", unsafe_allow_html=True)
+
+# Prepare Data: Aggregate by Month to see the Trend
+# We use 'date' and 'price' as defined in the food script
+df_trend = df_filtered.copy().set_index('date')
+
+# Resample by Month Start (MS) to get average price per month
+# This smooths out noise from individual markets
+monthly_trend = df_trend['price'].resample('MS').mean().dropna()
+df_trend_data = monthly_trend.reset_index()
+df_trend_data.columns = ['date', 'avg_price']
+
+# Check if we have enough data (at least 4 months) to calculate a trend
+if len(df_trend_data) >= 4:
+    # Calculate Rolling Statistics to define the "Normal" Trend
+    window = 3 # Compare current month to average of previous 3 months
+    df_trend_data['trend_line'] = df_trend_data['avg_price'].rolling(window=window, center=True).mean()
+    df_trend_data['trend_std'] = df_trend_data['avg_price'].rolling(window=window, center=True).std()
+    
+    # Calculate Z-Score: How far is this month from the trend?
+    df_trend_data['z_score'] = (df_trend_data['avg_price'] - df_trend_data['trend_line']) / df_trend_data['trend_std']
+    
+    # Identify Anomalies (Z-score > 1.5 indicates a significant deviation from trend)
+    # We drop NaNs created by the rolling window
+    df_anomalies = df_trend_data.dropna(subset=['z_score'])
+    trend_anomalies = df_anomalies[df_anomalies['z_score'].abs() > 1.5].sort_values('date', ascending=False)
+
+    # ============== Visualization ==============
+    fig_trend_anomaly = go.Figure()
+
+    # 1. Plot the Trend Line (Moving Average)
+    fig_trend_anomaly.add_trace(go.Scatter(
+        x=df_trend_data['date'],
+        y=df_trend_data['trend_line'],
+        mode='lines',
+        name='Expected Trend (3-Month Avg)',
+        line=dict(color='#808080', width=2, dash='dot'),
+    ))
+
+    # 2. Plot Actual Monthly Prices (Color coded by anomaly status)
+    normal_mask = df_trend_data['z_score'].abs() <= 1.5
+    
+    # Normal Points
+    fig_trend_anomaly.add_trace(go.Scatter(
+        x=df_trend_data[normal_mask]['date'],
+        y=df_trend_data[normal_mask]['avg_price'],
+        mode='markers+lines',
+        name='Normal Prices',
+        line=dict(color='#4CAF50', width=1),
+        marker=dict(size=8, color='#4CAF50')
+    ))
+    
+    # Anomaly Points
+    if not trend_anomalies.empty:
+        fig_trend_anomaly.add_trace(go.Scatter(
+            x=trend_anomalies['date'],
+            y=trend_anomalies['avg_price'],
+            mode='markers',
+            name='Anomaly Detected',
+            marker=dict(
+                size=12, 
+                color=trend_anomalies['z_score'].apply(lambda x: '#EF5350' if x > 0 else '#66BB6A'), # Red for high, Green for low
+                line=dict(color='white', width=2)
+            ),
+            text=trend_anomalies['date'].dt.strftime('%b %Y'),
+            hovertemplate='<b>%{text}</b><br>Price: %{y:,.0f} DZD<extra>Anomaly</extra>'
+        ))
+
+    fig_trend_anomaly.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='#1a1a1a',
+        plot_bgcolor='#262626',
+        font=dict(color='#FAFAFA'),
+        xaxis_title="Date",
+        yaxis_title="Average Price (DZD)",
+        height=400,
+        margin=dict(l=20, r=20, t=20, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(fig_trend_anomaly, use_container_width=True)
+
+    # ============== Text Details ==============
+    if not trend_anomalies.empty:
+        st.markdown("#### 🔎 Detected Market Shifts")
+        for _, row in trend_anomalies.head(3).iterrows():
+            # Calculate deviation from trend
+            deviation = ((row['avg_price'] - row['trend_line']) / row['trend_line']) * 100
+            
+            # Styling
+            color = "badge-danger" if row['z_score'] > 0 else "badge-success" # Red = Price Spike
+            icon = "📈" if row['z_score'] > 0 else "📉"
+            period_str = row['date'].strftime('%B %Y')
+            
+            st.markdown(f"""
+                <div class='insight-card' style='border-left-color: #FF9800;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div>
+                            <div style='font-size: 1.1rem; margin-bottom: 4px;'>{icon} <strong>{period_str}</strong></div>
+                            <div style='font-size: 0.85rem; color: #808080;'>
+                                Avg Price: {row['avg_price']:,.0f} DZD vs Trend: {row['trend_line']:,.0f} DZD
+                            </div>
+                        </div>
+                        <span class='badge {color}' style='font-size: 1rem;'>{deviation:+.1f}%</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("✅ No significant trend anomalies detected. Prices are following the expected seasonal progression.")
+
+else:
+    st.info("ℹ️ Not enough historical data available (less than 4 months) to calculate trend anomalies.")
+
+st.markdown("---")
 # ============== AI Insights ==============
 st.markdown("### 🤖 AI-Powered Insights")
 
