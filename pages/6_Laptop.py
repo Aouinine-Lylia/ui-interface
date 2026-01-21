@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import os
 import requests
 import joblib
@@ -17,6 +17,70 @@ st.set_page_config(
     layout="wide"
 )
 
+# ============== Custom CSS (High Contrast & Styles) ==============
+st.markdown("""
+    <style>
+    /* General Dark Theme Overrides */
+    .stApp {background-color: #1a1a1a;}
+    [data-testid="stSidebar"] {background-color: #262626; border-right: 1px solid #3a3a3a;}
+    [data-testid="stSidebar"] .element-container {color: #FAFAFA;}
+    h1, h2, h3, h4, h5, h6 {color: #FAFAFA !important;}
+    p, div, span {color: #B0B0B0;}
+    
+    /* High Contrast Buttons */
+    /* Targeting the primary buttons for Predict and Generate AI */
+    div[data-testid="stForm"] button[kind="primary"],
+    div[data-testid="column"] button[kind="primary"] {
+        background-color: #ffeb3b !important; /* Bright Yellow for Predict */
+        color: #000000 !important;
+        font-weight: 800 !important;
+        text-transform: uppercase;
+        border: none;
+        box-shadow: 0 0 10px rgba(255, 235, 59, 0.4);
+    }
+    
+    /* Specific style for Generate AI button if not in a form */
+    button[kind="primary"]:contains("Generate AI Insights") {
+        background-color: #00e5ff !important; /* Cyan for AI */
+        color: #000000 !important;
+        font-weight: 800;
+        box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+    }
+    
+    /* General button hover effects */
+    button:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+
+    /* Card Styles */
+    .kpi-card {
+        background-color: #262626;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #3a3a3a;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        margin-bottom: 12px;
+        height: 100%;
+    }
+    
+    /* Section Descriptions */
+    .section-desc {
+        font-style: italic;
+        color: #888;
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+        border-left: 3px solid #555;
+        padding-left: 10px;
+    }
+
+    /* Utility Classes */
+    .big-number { font-size: 2rem; font-weight: bold; color: #FAFAFA; margin: 4px 0; }
+    .label { font-size: 0.8rem; color: #808080; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .app-title { font-size: 1.8rem; font-weight: bold; color: #FAFAFA; margin: 0; }
+    </style>
+""", unsafe_allow_html=True)
+
 # ============== Load & Preprocess Laptop Data ==============
 @st.cache_data
 def load_laptops():
@@ -28,77 +92,89 @@ def load_laptops():
         if not os.path.exists(csv_path):
             csv_path = '/home/lylia/Documents/SIC-samsung/training-food/ui-interface/kaggle_laptop_data.csv'
 
-        df = pd.read_csv(csv_path)
+        # Create dummy data if file missing for demo purposes (remove this block in production)
+        if not os.path.exists(csv_path):
+             st.warning("CSV file not found. Using dummy data for demonstration.")
+             data = {
+                 'created_at': pd.date_range(end=datetime.today(), periods=100),
+                 'price_preview': np.random.randint(50000, 300000, 100),
+                 'RAM_SIZE': np.random.choice([8, 16, 32], 100),
+                 'SSD_SIZE': np.random.choice([256, 512, 1024], 100),
+                 'HDD_SIZE': 0,
+                 'SCREEN_SIZE': 15.6,
+                 'spec_Etat': np.random.choice(['JAMAIS UTILISÉ', 'BON ÉTAT', 'MOYEN'], 100),
+                 'CPU': ['Core i5 ' + str(i) + 'th Gen' for i in np.random.randint(8, 13, 100)],
+                 'DEDICATED_GPU': np.random.choice(['INTEGRATED', 'RTX 3060', 'GTX 1650'], 100),
+                 'model_name': np.random.choice(['HP', 'Dell', 'Lenovo', 'Asus'], 100),
+                 'city': np.random.choice(['Algiers', 'Oran', 'Constantine', 'Annaba', 'Blida'], 100)
+             }
+             df = pd.DataFrame(data)
+        else:
+            df = pd.read_csv(csv_path)
         
-        # 2. Parse Date - FIX: Handle the actual format in the dataset
+        # 2. Parse Date
         def parse_date(date_str):
             try:
                 clean_str = str(date_str).strip()
-                # Remove 'T' and 'Z' and parse
                 clean_str = clean_str.replace('T', ' ').replace('Z', '')
-                # Split on space to get date parts
                 parts = clean_str.split()
                 if len(parts) >= 4:
                     year, month, day = parts[0], parts[1], parts[2]
                     time_part = parts[3] if len(parts) > 3 else "00:00:00.000"
                     date_string = f"{year}-{month.zfill(2)}-{day.zfill(2)} {time_part}"
                     return pd.to_datetime(date_string, errors='coerce')
-                return pd.NaT
+                # Fallback for standard ISO
+                return pd.to_datetime(clean_str, errors='coerce')
             except:
                 return pd.NaT
         
-        df['created_at'] = df['created_at'].apply(parse_date)
-        df['date'] = df['created_at']
+        if 'created_at' in df.columns:
+            df['created_at'] = df['created_at'].apply(parse_date)
+            df['date'] = df['created_at']
+        else:
+            df['date'] = pd.to_datetime('today')
+            
         df = df.dropna(subset=['date', 'price_preview'])
         
-        # 3. DATA CLEANING: Handle RAM_SIZE strings (e.g., "8GB" -> 8.0)
+        # 3. DATA CLEANING
         if 'RAM_SIZE' in df.columns:
-            df['RAM_SIZE'] = df['RAM_SIZE'].astype(str).str.extract(r'(\d+)').astype(float)
-            df['RAM_SIZE'] = df['RAM_SIZE'].fillna(8.0)
+            df['RAM_SIZE'] = df['RAM_SIZE'].astype(str).str.extract(r'(\d+)').astype(float).fillna(8.0)
         else:
             df['RAM_SIZE'] = 8.0
 
-        # 4. CRITICAL FIX: Handle storage columns properly
+        # 4. Storage
         for col in ['SSD_SIZE', 'HDD_SIZE']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.extract(r'(\d+)').astype(float).fillna(0)
+            if col not in df.columns: df[col] = 0
+            df[col] = df[col].astype(str).str.extract(r'(\d+)').astype(float).fillna(0)
         
-        # Calculate total storage
         df['Total_Storage'] = df.get('SSD_SIZE', 0) + df.get('HDD_SIZE', 0)
-        df['Total_Storage'] = df['Total_Storage'].replace(0, 256)  # Default if missing
+        df['Total_Storage'] = df['Total_Storage'].replace(0, 256)
 
-        # 5. Handle SCREEN_SIZE
+        # 5. Screen
         if 'SCREEN_SIZE' in df.columns:
             df['SCREEN_SIZE'] = pd.to_numeric(df['SCREEN_SIZE'], errors='coerce').fillna(15.6)
         else:
             df['SCREEN_SIZE'] = 15.6
 
-        # 6. Ensure price is numeric
+        # 6. Price
         df['price_preview'] = pd.to_numeric(df['price_preview'], errors='coerce')
         df = df.dropna(subset=['price_preview'])
         
-        # 7. ALGERIAN MARKET FIX: Standardize condition names (spec_Etat)
+        # 7. Condition
         condition_mapping = {
-            'JAMAIS UTILIS': 'JAMAIS UTILISÉ',  # Standardize spelling
-            'BON TAT': 'BON ÉTAT',
-            'MOYEN': 'MOYEN',
-            'NEUF': 'NEUF',
-            'TRES BON': 'TRÈS BON',
-            'ETAT NEUF': 'ÉTAT NEUF'
+            'JAMAIS UTILIS': 'JAMAIS UTILISÉ', 'BON TAT': 'BON ÉTAT',
+            'MOYEN': 'MOYEN', 'NEUF': 'NEUF', 'TRES BON': 'TRÈS BON', 'ETAT NEUF': 'ÉTAT NEUF'
         }
         df['spec_Etat'] = df['spec_Etat'].fillna('Unknown')
         df['spec_Etat'] = df['spec_Etat'].str.upper().map(condition_mapping).fillna(df['spec_Etat'])
         
-        # 8. Extract CPU information
+        # 8. CPU Logic
         def extract_cpu_gen(cpu_str):
             if pd.isna(cpu_str): return 10
             cpu_str = str(cpu_str).upper()
-            # Extract generation number (e.g., "11TH GEN" -> 11, "I7 7700HQ" -> 7)
             match = re.search(r'(\d+)TH GEN|I\d\s*(\d)(?:\d{3})', cpu_str)
-            if match:
-                return int(match.group(1) or match.group(2))
+            if match: return int(match.group(1) or match.group(2))
             return 10
-        
         df['CPU_Gen'] = df['CPU'].apply(extract_cpu_gen)
         
         def get_cpu_type(cpu_str):
@@ -110,39 +186,30 @@ def load_laptops():
             if "I3" in cpu_str: return "Core i3"
             if "RYZEN" in cpu_str: return "Ryzen"
             return "Other"
-        
         df['CPU_Type'] = df['CPU'].apply(get_cpu_type)
         
-        # 9. Extract CPU Tier for market segmentation
         def get_cpu_tier(cpu_str):
             if pd.isna(cpu_str): return "Unknown"
             cpu_str = str(cpu_str).upper()
             if "I9" in cpu_str or "R9" in cpu_str: return "Ultra High-End"
-            if "I7" in cpu_str or "R7" in cpu_str or "THREADRIPPER" in cpu_str: return "High-End"
+            if "I7" in cpu_str or "R7" in cpu_str: return "High-End"
             if "I5" in cpu_str or "R5" in cpu_str: return "Mid-Range"
-            if "I3" in cpu_str or "R3" in cpu_str or "CELERON" in cpu_str or "PENTIUM" in cpu_str: return "Entry-Level"
+            if "I3" in cpu_str or "R3" in cpu_str or "CELERON" in cpu_str: return "Entry-Level"
             return "Other"
-            
         df['cpu_tier'] = df['CPU'].apply(get_cpu_tier)
         
-        # 10. GPU handling - fix for Algerian market
+        # 9. GPU
         df['DEDICATED_GPU'] = df['DEDICATED_GPU'].fillna('INTEGRATED')
         df['Has_GPU'] = df['DEDICATED_GPU'].apply(lambda x: 0 if pd.isna(x) or str(x).upper() == 'INTEGRATED' or x == '' else 1)
         
-        # 11. Mock missing schema columns if necessary
-        if 'discount_flag' not in df.columns:
-            df['discount_flag'] = 0 
-        if 'stock_status' not in df.columns:
-            df['stock_status'] = 'In Stock'
-        
-        # 12. Clean model names
+        # 10. Mock columns
+        if 'discount_flag' not in df.columns: df['discount_flag'] = 0 
+        if 'stock_status' not in df.columns: df['stock_status'] = 'In Stock'
         df['model_name'] = df['model_name'].fillna('Unknown').str.upper().str.strip()
             
         return df
     except Exception as e:
         st.error(f"Error loading laptops data: {e}")
-        import traceback
-        st.error(traceback.format_exc())
         return pd.DataFrame()
 
 df_laptops = load_laptops()
@@ -151,91 +218,38 @@ df_laptops = load_laptops()
 def load_my_model():
     try:
         model_path = 'pages/laptop_price_regression_model.pkl'
-        if os.path.exists(model_path):
-            return joblib.load(model_path)
-        else:
-            # Try alternative path
-            alt_path = 'laptop_price_regression_model.pkl'
-            if os.path.exists(alt_path):
-                return joblib.load(alt_path)
-    except Exception as e:
-        st.warning(f"Model loading failed: {e}")
-    
-    # Return dummy model if file missing
+        if os.path.exists(model_path): return joblib.load(model_path)
+        alt_path = 'laptop_price_regression_model.pkl'
+        if os.path.exists(alt_path): return joblib.load(alt_path)
+    except Exception as e: st.warning(f"Model loading failed: {e}")
     from sklearn.dummy import DummyRegressor
     return DummyRegressor(strategy='mean')
 
 model = load_my_model()
 
-# Dark theme CSS
-st.markdown("""
-    <style>
-    .stApp {background-color: #1a1a1a;}
-    [data-testid="stSidebar"] {background-color: #262626; border-right: 1px solid #3a3a3a;}
-    [data-testid="stSidebar"] .element-container {color: #FAFAFA;}
-    h1, h2, h3, h4, h5, h6 {color: #FAFAFA !important;}
-    p, div, span {color: #B0B0B0;}
-    .kpi-card {
-        background-color: #262626;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #3a3a3a;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        margin-bottom: 12px;
-        height: 100%;
-    }
-    .insight-card {
-        background-color: #262626;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #3a3a3a;
-        border-left: 4px solid #2196F3;
-        margin-bottom: 16px;
-    }
-    .badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-    .badge-success { background-color: rgba(76, 175, 80, 0.2); color: #66BB6A; }
-    .badge-danger { background-color: rgba(244, 67, 54, 0.2); color: #EF5350; }
-    .badge-warning { background-color: rgba(255, 152, 0, 0.2); color: #FFA726; }
-    .badge-info { background-color: rgba(33, 150, 243, 0.2); color: #42A5F5; }
-    .big-number {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #FAFAFA;
-        margin: 4px 0;
-    }
-    .label {
-        font-size: 0.8rem;
-        color: #808080;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-    }
-    .app-title { font-size: 1.8rem; font-weight: bold; color: #FAFAFA; margin: 0; }
-    </style>
-""", unsafe_allow_html=True)
-
 # Sidebar
 with st.sidebar:
-    st.markdown("<div class='app-title'>DZA PriceSight</div>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style='text-align: left; padding: 20px 0;'>
+            <span class='watermelon-icon'>🍉</span>
+            <div style='display: inline-block; vertical-align: middle;'>
+                <div class='app-title'>DZA PriceSight</div>
+                <div class='app-subtitle'>AI Price Insights</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     st.markdown("---")
-    st.page_link("landingPage.py", label="📊 Overview", icon="🏠")
+    st.markdown("<p class='label'>Main</p>", unsafe_allow_html=True)
+    st.page_link("landingPage.py", label="Overview", icon="🏠")
     st.markdown("---")
-    st.page_link("pages/5_Food_Agriculture.py", label="🌾 Food & Agriculture")
-    st.page_link("pages/6_Laptop.py", label="💻 Laptops", icon="💻")
+    st.markdown("<p class='label'>Categories</p>", unsafe_allow_html=True)
+    st.page_link("pages/5_Food_Agriculture.py", label="Food & Agriculture", icon="🌾")
+    st.page_link("pages/6_Laptop.py", label="Laptops", icon="💻")
 
 # Session State Init
-if 'brand_filter' not in st.session_state:
-    st.session_state.brand_filter = 'All'
-if 'gpu_filter' not in st.session_state:
-    st.session_state.gpu_filter = False
-if 'gaming_filter' not in st.session_state:
-    st.session_state.gaming_filter = False
+if 'brand_filter' not in st.session_state: st.session_state.brand_filter = 'All'
+if 'gpu_filter' not in st.session_state: st.session_state.gpu_filter = False
+if 'gaming_filter' not in st.session_state: st.session_state.gaming_filter = False
 
 # ============== Header & Prediction ==============
 col1, col2 = st.columns([4, 1])
@@ -243,57 +257,83 @@ with col1:
     st.markdown("# 💻 Laptop Price Intelligence")
     st.markdown("### Executive Market Dashboard - Algeria")
 with col2:
-    if st.button("🔮 Predict Price", type="primary", use_container_width=True):
+    if st.button("🔮 Predict Price", use_container_width=True, key="predict_food_btn"):
         st.session_state.show_predict_form = True
 
-# Prediction Form Logic
+
 if st.session_state.get('show_predict_form'):
     with st.expander("💻 Laptop Specification Input", expanded=True):
         with st.form("prediction_form"):
             col_a, col_b = st.columns(2)
             with col_a:
-                ram = st.number_input("RAM (GB)", min_value=4, max_value=64, value=16, step=4)
-                storage = st.number_input("Storage (GB)", min_value=128, max_value=2048, value=512, step=128)
+                ram_gb = st.number_input("RAM (GB)", min_value=4, max_value=64, value=16, step=4)
+                storage = st.number_input("Total Storage (GB)", min_value=128, max_value=2048, value=512, step=128)
                 cpu_gen = st.number_input("CPU Generation", min_value=7, max_value=14, value=12)
                 screen = st.number_input("Screen Size", min_value=11.0, max_value=18.0, value=15.6, step=0.1)
             with col_b:
-                cpu_type = st.selectbox("CPU Type", ["Core i7", "Core i3", "Core i5", "Core i9", "Ryzen", "Other"])
-                condition = st.selectbox("Condition (État)", ["JAMAIS UTILISÉ", "BON ÉTAT", "MOYEN", "Unknown"])
+                cpu_type_options = ["Core i3", "Core i5", "Core i7", "Core i9", "Ryzen", "Other"]
+                cpu_type = st.selectbox("CPU Type", cpu_type_options, index=2)
+                condition_options = ["JAMAIS UTILIS", "MOYEN", "Unknown"]
+                condition = st.selectbox("Condition (État)", condition_options, index=0)
                 has_gpu = st.checkbox("Has Dedicated GPU", value=True)
-            
+            listing_date = st.date_input("Listing Date", value=datetime.today().date())
+            # Model name options from training set (one-hot columns)
+            model_name_options = [
+                "ALIENWARE", "ASPIRE", "BLADE", "COMPAQ", "DYNABOOK", "ELITEBOOK", "ENVY", "GALAXY", "GF", "IDEAPAD", "IMAC", "INSPIRON", "KATANA", "LATITUDE", "LEGION", "MAC", "MACBOOK", "NITRO", "OMEN", "OPTIPLEX", "PAVILION", "PRECISION", "PREDATOR", "PROBOOK", "ROG", "SPECTRE", "SPIN", "STEALTH", "STRIX", "SURFACE", "SWIFT", "SWORD", "THINKBOOK", "THINKPAD", "TRANSFORMER", "TRAVELMATE", "TUF", "VECTOR", "VICTUS", "VIVOBOOK", "VOSTRO", "XPS", "YOGA", "ZBOOK", "ZENBOOK"
+            ]
+            model_name = st.selectbox("Model Name (Brand)", model_name_options, index=11)
             if st.form_submit_button("Calculate Estimated Price (DZD)"):
                 try:
-                    # Create feature dictionary matching model training
+                    days_since_posted = (datetime.now().date() - listing_date).days
+                    # One-hot encoding for CPU_Type
+                    cpu_type_dict = {f"CPU_Type_{t}": 1 if cpu_type == t else 0 for t in cpu_type_options}
+                    # One-hot encoding for Condition
+                    condition_dict = {f"Condition_{c}": 1 if condition == c else 0 for c in condition_options}
+                    # One-hot encoding for model_name
+                    model_name_dict = {f"model_name_{m}": 1 if model_name == m else 0 for m in model_name_options}
                     features = {
-                        "RAM_SIZE": ram,
+                        "RAM_GB": ram_gb,
                         "Total_Storage": storage,
                         "CPU_Gen": cpu_gen,
                         "Has_GPU": 1 if has_gpu else 0,
                         "SCREEN_SIZE": screen,
-                        "CPU_Type_Core i3": 1 if cpu_type == "Core i3" else 0,
-                        "CPU_Type_Core i5": 1 if cpu_type == "Core i5" else 0,
-                        "CPU_Type_Core i7": 1 if cpu_type == "Core i7" else 0,
-                        "CPU_Type_Core i9": 1 if cpu_type == "Core i9" else 0,
-                        "CPU_Type_Other": 1 if cpu_type == "Other" else 0,
-                        "CPU_Type_Ryzen": 1 if cpu_type == "Ryzen" else 0,
-                        "spec_Etat_JAMAIS UTILISÉ": 1 if condition == "JAMAIS UTILISÉ" else 0,
-                        "spec_Etat_BON ÉTAT": 1 if condition == "BON ÉTAT" else 0,
-                        "spec_Etat_MOYEN": 1 if condition == "MOYEN" else 0,
-                        "spec_Etat_Unknown": 1 if condition == "Unknown" else 0
+                        "days_since_posted": days_since_posted,
                     }
-                    
+                    features.update(cpu_type_dict)
+                    features.update(condition_dict)
+                    features.update(model_name_dict)
+                    # Required column order
+                    required_columns = [
+                        'RAM_GB', 'Total_Storage', 'CPU_Gen', 'Has_GPU', 'SCREEN_SIZE',
+                        'days_since_posted', 'CPU_Type_Core i3', 'CPU_Type_Core i5',
+                        'CPU_Type_Core i7', 'CPU_Type_Core i9', 'CPU_Type_Other',
+                        'CPU_Type_Ryzen', 'Condition_JAMAIS UTILIS', 'Condition_MOYEN',
+                        'Condition_Unknown', 'model_name_ALIENWARE', 'model_name_ASPIRE',
+                        'model_name_BLADE', 'model_name_COMPAQ', 'model_name_DYNABOOK',
+                        'model_name_ELITEBOOK', 'model_name_ENVY', 'model_name_GALAXY',
+                        'model_name_GF', 'model_name_IDEAPAD', 'model_name_IMAC',
+                        'model_name_INSPIRON', 'model_name_KATANA', 'model_name_LATITUDE',
+                        'model_name_LEGION', 'model_name_MAC', 'model_name_MACBOOK',
+                        'model_name_NITRO', 'model_name_OMEN', 'model_name_OPTIPLEX',
+                        'model_name_PAVILION', 'model_name_PRECISION', 'model_name_PREDATOR',
+                        'model_name_PROBOOK', 'model_name_ROG', 'model_name_SPECTRE',
+                        'model_name_SPIN', 'model_name_STEALTH', 'model_name_STRIX',
+                        'model_name_SURFACE', 'model_name_SWIFT', 'model_name_SWORD',
+                        'model_name_THINKBOOK', 'model_name_THINKPAD', 'model_name_TRANSFORMER',
+                        'model_name_TRAVELMATE', 'model_name_TUF', 'model_name_VECTOR',
+                        'model_name_VICTUS', 'model_name_VIVOBOOK', 'model_name_VOSTRO',
+                        'model_name_XPS', 'model_name_YOGA', 'model_name_ZBOOK',
+                        'model_name_ZENBOOK'
+                    ]
                     input_df = pd.DataFrame([features])
+                    input_df = input_df.reindex(columns=required_columns, fill_value=0)
                     prediction = model.predict(input_df)[0]
-                    
-                    # If model was trained on log prices, transform back
-                    if prediction < 1000:  # Likely log-transformed
-                        prediction = np.exp(prediction)
-                    
+                    if prediction < 1000: prediction = np.exp(prediction)
                     st.success(f"### Estimated Market Price: {prediction:,.0f} DZD")
                     st.info(f"This is approximately {prediction/220:.0f} USD (at 220 DZD/USD)")
+                    st.caption(f"Model included listing age factor: {days_since_posted} days.")
                 except Exception as e:
-                    st.error(f"Prediction error: {e}")
-                    # Fallback to simple average
+                    st.error(f"Prediction error (Model might not support new feature): {e}")
                     fallback = df_laptops['price_preview'].median()
                     st.warning(f"Using median market price: {fallback:,.0f} DZD")
 
@@ -316,69 +356,43 @@ with f4:
 
 # Apply Logic
 df = df_laptops.copy()
-if st.session_state.brand_filter != 'All':
-    df = df[df['model_name'] == st.session_state.brand_filter]
-if st.session_state.gpu_filter:
-    df = df[df['DEDICATED_GPU'] != 'INTEGRATED']
-if st.session_state.gaming_filter:
-    df = df[df['DEDICATED_GPU'].str.contains('RTX|GTX', case=False, na=False)]
+if st.session_state.brand_filter != 'All': df = df[df['model_name'] == st.session_state.brand_filter]
+if st.session_state.gpu_filter: df = df[df['DEDICATED_GPU'] != 'INTEGRATED']
+if st.session_state.gaming_filter: df = df[df['DEDICATED_GPU'].str.contains('RTX|GTX', case=False, na=False)]
 
-# Feature Engineering for Market Segmentation
 if len(df) > 0:
-    # Define Segments based on Price Quantiles (Algerian market context)
     if df['price_preview'].nunique() >= 3:
         df['segment'] = pd.qcut(df['price_preview'], 3, labels=['Budget', 'Mid-Range', 'Premium'], duplicates='drop')
-    else:
-        df['segment'] = 'Mid-Range'
-else:
-    df['segment'] = 'Unknown'
+    else: df['segment'] = 'Mid-Range'
+else: df['segment'] = 'Unknown'
 
-# Time aggregations
 df['month'] = df['date'].dt.to_period('M').dt.to_timestamp()
-monthly_data = df.groupby('month').agg(
-    median_price=('price_preview', 'median'),
-    mean_price=('price_preview', 'mean'),
-    count=('price_preview', 'count')
-).reset_index()
+monthly_data = df.groupby('month').agg(median_price=('price_preview', 'median'), mean_price=('price_preview', 'mean'), count=('price_preview', 'count')).reset_index()
 
 # ==========================================
 # 1. EXECUTIVE OVERVIEW
 # ==========================================
 st.markdown("## 1. Executive Overview - Algerian Laptop Market")
+st.caption("High-level key performance indicators for the current market snapshot.")
 
 # KPI Logic
 current_median = df['price_preview'].median() if len(df) > 0 else 0
 current_mean = df['price_preview'].mean() if len(df) > 0 else 0
 
-# Baseline comparison
-if len(monthly_data) > 1:
-    baseline_median = monthly_data.iloc[0]['median_price']
-    median_change_pct = ((current_median - baseline_median) / baseline_median) * 100 if baseline_median > 0 else 0
-else:
-    baseline_median = current_median
-    median_change_pct = 0
-
-# Price Index (Base 100)
+baseline_median = monthly_data.iloc[0]['median_price'] if len(monthly_data) > 1 else current_median
+median_change_pct = ((current_median - baseline_median) / baseline_median) * 100 if baseline_median > 0 else 0
 price_index = (current_median / baseline_median) * 100 if baseline_median > 0 else 100
 
-# Trend Direction (30-day slope)
+trend_indicator = "N/A"
+trend_color = "#66BB6A" # Default green
 if len(monthly_data) >= 2:
     recent = monthly_data.tail(3)
     if len(recent) > 1:
         slope, _ = np.polyfit(range(len(recent)), recent['median_price'], 1)
         trend_indicator = "↑" if slope > 500 else ("↓" if slope < -500 else "→")
-        trend_color = "badge-danger" if slope > 500 else ("badge-success" if slope < -500 else "badge-warning")
-    else:
-        trend_indicator = "→"
-        trend_color = "badge-warning"
-else:
-    trend_indicator = "N/A"
-    trend_color = "badge-warning"
+        trend_color = "#EF5350" if slope > 500 else ("#66BB6A" if slope < -500 else "#FFA726")
 
-# Volatility Score (Coefficient of Variation)
 volatility = (df['price_preview'].std() / df['price_preview'].mean()) if len(df) > 0 and df['price_preview'].mean() > 0 else 0
-
-# Market listings count
 total_listings = len(df)
 
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -405,7 +419,7 @@ with kpi3:
     st.markdown(f"""
         <div class='kpi-card'>
             <div class='label'>Trend Direction</div>
-            <div class='big-number'><span class='badge {trend_color}' style='font-size:2rem'>{trend_indicator}</span></div>
+            <div class='big-number'><span style='color:{trend_color}; font-size:2.5rem'>{trend_indicator}</span></div>
             <div class='label' style='margin-top:8px'>Monthly Movement</div>
         </div>
     """, unsafe_allow_html=True)
@@ -425,57 +439,26 @@ st.markdown("---")
 # 2. PRICE EVOLUTION
 # ==========================================
 st.markdown("## 2. Price Evolution Over Time")
+st.caption("Historical analysis of pricing trends and item condition distribution.")
 
 c1, c2 = st.columns([2, 1])
-
 with c1:
     st.markdown("### Median Price Trend (DZD)")
     fig_line = go.Figure()
-    fig_line.add_trace(go.Scatter(
-        x=monthly_data['month'], 
-        y=monthly_data['median_price'],
-        mode='lines+markers',
-        name='Median Price',
-        line=dict(color='#2196F3', width=3),
-        marker=dict(size=8)
-    ))
-    fig_line.update_layout(
-        template='plotly_dark', 
-        height=300, 
-        margin=dict(l=0, r=0, t=20, b=0),
-        xaxis_title="",
-        yaxis_title="Price (DZD)",
-        hovermode='x unified'
-    )
+    fig_line.add_trace(go.Scatter(x=monthly_data['month'], y=monthly_data['median_price'], mode='lines+markers', name='Median Price', line=dict(color='#2196F3', width=3), marker=dict(size=8)))
+    fig_line.update_layout(template='plotly_dark', height=300, margin=dict(l=0, r=0, t=20, b=0), xaxis_title="", yaxis_title="Price (DZD)", hovermode='x unified')
     st.plotly_chart(fig_line, use_container_width=True)
 
 with c2:
     st.markdown("### Condition Distribution")
     condition_counts = df['spec_Etat'].value_counts()
-    fig_pie = px.pie(
-        values=condition_counts.values,
-        names=condition_counts.index,
-        title="Laptop Conditions in Market"
-    )
+    fig_pie = px.pie(values=condition_counts.values, names=condition_counts.index, title="Laptop Conditions in Market")
     fig_pie.update_layout(template='plotly_dark', height=300, margin=dict(l=0, r=0, t=40, b=0))
     st.plotly_chart(fig_pie, use_container_width=True)
 
 st.markdown("### Price Distribution by Segment")
-fig_box = px.box(
-    df, 
-    x='segment', 
-    y='price_preview', 
-    color='segment',
-    color_discrete_map={'Budget':'#4CAF50', 'Mid-Range':'#FFC107', 'Premium':'#F44336'},
-    points='outliers'
-)
-fig_box.update_layout(
-    template='plotly_dark', 
-    height=400, 
-    xaxis_title="Market Segment", 
-    yaxis_title="Price (DZD)",
-    showlegend=False
-)
+fig_box = px.box(df, x='segment', y='price_preview', color='segment', color_discrete_map={'Budget':'#4CAF50', 'Mid-Range':'#FFC107', 'Premium':'#F44336'}, points='outliers')
+fig_box.update_layout(template='plotly_dark', height=400, xaxis_title="Market Segment", yaxis_title="Price (DZD)", showlegend=False)
 st.plotly_chart(fig_box, use_container_width=True)
 
 st.markdown("---")
@@ -484,45 +467,28 @@ st.markdown("---")
 # 3. MARKET SEGMENTATION
 # ==========================================
 st.markdown("## 3. Market Segmentation Analysis")
+st.caption("Comparing value across hardware tiers and brand popularity.")
 
 c1, c2 = st.columns(2)
-
 with c1:
     st.markdown("### Price by CPU Tier")
     cpu_tier_price = df.groupby('cpu_tier')['price_preview'].median().sort_values(ascending=False)
-    fig_cpu = px.bar(
-        x=cpu_tier_price.values,
-        y=cpu_tier_price.index,
-        orientation='h',
-        title="Median Price by Processor Tier"
-    )
+    fig_cpu = px.bar(x=cpu_tier_price.values, y=cpu_tier_price.index, orientation='h', title="Median Price by Processor Tier")
     fig_cpu.update_layout(template='plotly_dark', height=350, xaxis_title="Price (DZD)", yaxis_title="")
     st.plotly_chart(fig_cpu, use_container_width=True)
 
 with c2:
     st.markdown("### Top Brands by Volume")
     brand_counts = df['model_name'].value_counts().head(10)
-    fig_brands = px.bar(
-        x=brand_counts.values,
-        y=brand_counts.index,
-        orientation='h',
-        title="Most Listed Laptop Brands"
-    )
+    fig_brands = px.bar(x=brand_counts.values, y=brand_counts.index, orientation='h', title="Most Listed Laptop Brands")
     fig_brands.update_layout(template='plotly_dark', height=350, xaxis_title="Listings", yaxis_title="")
     st.plotly_chart(fig_brands, use_container_width=True)
 
 st.markdown("### Value Analysis: Price per GB of RAM")
 if df['RAM_SIZE'].sum() > 0:
     df['price_per_gb_ram'] = df['price_preview'] / df['RAM_SIZE'].replace(0, 1)
-    
     value_data = df.groupby('model_name')['price_per_gb_ram'].mean().sort_values(ascending=True).head(10)
-    fig_value = px.bar(
-        x=value_data.values,
-        y=value_data.index,
-        orientation='h',
-        title="Best Value Laptops (Lower = Better)",
-        labels={'x': 'DZD per GB RAM', 'y': 'Brand'}
-    )
+    fig_value = px.bar(x=value_data.values, y=value_data.index, orientation='h', title="Best Value Laptops (Lower = Better)", labels={'x': 'DZD per GB RAM', 'y': 'Brand'})
     fig_value.update_layout(template='plotly_dark', height=400)
     fig_value.update_traces(marker_color='#66BB6A')
     st.plotly_chart(fig_value, use_container_width=True)
@@ -530,12 +496,12 @@ if df['RAM_SIZE'].sum() > 0:
 st.markdown("---")
 
 # ==========================================
-# 4. ALGERIAN MARKET INSIGHTS
+# 4. ALGERIAN MARKET SPECIFIC INSIGHTS
 # ==========================================
 st.markdown("## 4. Algerian Market Specific Insights")
+st.caption("Local analysis including geography, condition preferences, and regional pricing.")
 
 m1, m2, m3 = st.columns(3)
-
 with m1:
     used_count = df[df['spec_Etat'] != 'JAMAIS UTILISÉ'].shape[0]
     used_pct = (used_count / len(df)) * 100 if len(df) > 0 else 0
@@ -550,17 +516,24 @@ with m3:
     avg_storage = df['Total_Storage'].mean() if 'Total_Storage' in df.columns else 0
     st.metric("Average Storage Capacity", f"{avg_storage:.0f} GB")
 
-# Regional distribution (if city data available)
+# NEW: Cheapest Cities Graph
 if 'city' in df.columns and df['city'].notna().sum() > 0:
-    st.markdown("### Top Cities by Listings")
-    city_counts = df['city'].value_counts().head(10)
+    st.markdown("### Cities by Average Price (Cheapest to Most Expensive)")
+    st.caption("Identify regions with the lowest average listing costs to find better deals.")
+    
+    # Calculate average price per city and sort ascending (Cheapest first)
+    city_avg_price = df.groupby('city')['price_preview'].mean().sort_values(ascending=True)
+    
     fig_cities = px.bar(
-        x=city_counts.values,
-        y=city_counts.index,
+        x=city_avg_price.values,
+        y=city_avg_price.index,
         orientation='h',
-        title="Geographic Distribution of Listings"
+        title="Average Price by City (DZD)",
+        labels={'x': 'Average Price (DZD)', 'y': 'City'},
+        color=city_avg_price.values, # Color gradient based on price
+        color_continuous_scale='Viridis_r' # Reverse Viridis (Green is low/cheap, Purple is high/expensive)
     )
-    fig_cities.update_layout(template='plotly_dark', height=400, xaxis_title="Number of Listings", yaxis_title="")
+    fig_cities.update_layout(template='plotly_dark', height=400, xaxis_title="Avg Price (DZD)", yaxis_title="")
     st.plotly_chart(fig_cities, use_container_width=True)
 
 st.markdown("---")
@@ -569,11 +542,11 @@ st.markdown("---")
 # 5. OUTLIERS & ALERTS
 # ==========================================
 st.markdown("## 5. Outliers & Price Alerts")
+st.caption("Identify unusual pricing deviations in the current dataset.")
 
 if len(df) > 0:
     df['z_score'] = np.abs((df['price_preview'] - df['price_preview'].mean()) / df['price_preview'].std())
     outliers = df[df['z_score'] > 2.5].sort_values('price_preview', ascending=False)
-    
     if not outliers.empty:
         st.markdown("### ⚠️ Unusual Pricing Detected")
         for _, row in outliers.head(5).iterrows():
@@ -592,13 +565,15 @@ else:
 
 st.markdown("---")
 
-
-# ============== FORECASTING (Kept from Original) ==============
+# ============== FORECASTING ==============
 st.markdown("## 7. Market Forecasting")
+st.caption("Projected price movements based on historical data.")
+
+# NEW NOTE
+st.info("ℹ️ **Note:** These forecasts estimate expected market price movement, not individual laptop prices.")
 
 avg_price = df['price_preview'].mean() if len(df) > 0 else 0
 next_pred = avg_price
-avg_uncertainty = 0
 
 FORECAST_DIR = os.path.join(os.path.dirname(__file__), "forecasting_laptops")
 
@@ -607,10 +582,7 @@ if os.path.exists(FORECAST_DIR) and not df_laptops.empty:
     
     def get_readable_condition(condition_key):
         key_norm = condition_key.upper().replace('_', ' ')
-        mapping = {
-            "BON TAT": "Good State", "JAMAIS UTILIS": "Never Used", "MOYEN": "Fair",
-            "NEUF": "New", "TRES BON": "Very Good", "ETAT NEUF": "Brand New"
-        }
+        mapping = {"BON TAT": "Good State", "JAMAIS UTILIS": "Never Used", "MOYEN": "Fair", "NEUF": "New", "TRES BON": "Very Good", "ETAT NEUF": "Brand New"}
         return mapping.get(key_norm, condition_key.replace('_', ' ').title())
 
     forecast_options = {}
@@ -618,7 +590,6 @@ if os.path.exists(FORECAST_DIR) and not df_laptops.empty:
         filename = os.path.basename(file)
         name_part = filename.replace('_forecast.csv', '')
         parts = name_part.rsplit('_', 1)
-        
         if len(parts) == 2:
             condition_raw = parts[0]
             tier = parts[1]
@@ -630,8 +601,6 @@ if os.path.exists(FORECAST_DIR) and not df_laptops.empty:
             forecast_options[display_name] = filename
 
     sorted_display_names = sorted(forecast_options.keys())
-
-    st.markdown("### 🔮 Select Laptop Group to Forecast")
     selected_display_name = st.selectbox("Available Forecasts", sorted_display_names, label_visibility="collapsed")
     selected_filename = forecast_options[selected_display_name]
     forecast_path = os.path.join(FORECAST_DIR, selected_filename)
@@ -646,14 +615,10 @@ if os.path.exists(FORECAST_DIR) and not df_laptops.empty:
         if all(col in df_future.columns for col in required_columns):
             df_future['date'] = pd.to_datetime(df_future['date'])
             next_pred = df_future['predicted_price'].iloc[0]
-            if 'lower_bound' in df_future.columns and 'upper_bound' in df_future.columns:
-                avg_uncertainty = (df_future['upper_bound'] - df_future['lower_bound']).mean()
             
             kpi_f1, kpi_f3 = st.columns(2)
-            with kpi_f1:
-                st.metric("Next Month Prediction", f"{next_pred:,.0f} DZD")
-            with kpi_f3:
-                st.metric("Forecast Horizon", f"{len(df_future)} Months")
+            with kpi_f1: st.metric("Next Month Prediction", f"{next_pred:,.0f} DZD")
+            with kpi_f3: st.metric("Forecast Horizon", f"{len(df_future)} Months")
 
             fig_f = go.Figure()
             fig_f.add_trace(go.Scatter(x=df_future['date'], y=df_future['predicted_price'], mode='lines+markers', name='Forecast', line=dict(color='#2196F3')))
@@ -674,6 +639,7 @@ st.markdown("---")
 
 # ============== AI INSIGHTS (Kept from Original) ==============
 st.markdown("## 8. AI-Powered Market Insights")
+st.caption("Generative analysis of current market conditions.")
 
 top_brand = df['model_name'].value_counts().index[0] if len(df) > 0 else "Unknown"
 price_trend = "Up" if trend_indicator == "↑" else ("Down" if trend_indicator == "↓" else "Stable")
@@ -709,7 +675,8 @@ def get_ai_insights(context):
     except:
         return None
 
-if st.button("🚀 Generate AI Insights", type="primary"):
+# HIGH CONTRAST BUTTON
+if st.button("🚀 Generate AI Insights" ,use_container_width=True, key="ai_btn"):
     with st.spinner("Analyzing..."):
         insights = get_ai_insights(context)
         if insights:
