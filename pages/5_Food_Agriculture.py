@@ -655,73 +655,18 @@ EVENT_MARKER_COLORS = {
     "religious": "#FF9800",      # Orange
     "cultural": "#4CAF50",       # Green
     "institutional": "#9C27B0",  # Purple
-    "covid": "#F44336"           # Red (only for background)
+    "covid": "#F44336",           # Red (only for background)
+    "season": "#607D8B"         # Blue Grey (not used for markers)
 }
 
 EVENT_NAMES_DISPLAY = {
     "religious": "🕌 Religious Events (Ramadan, Eid, etc.)",
     "cultural": "🎊 Cultural Events (Yennayer)",
     "institutional": "🏛️ Institutional Events (School, BAC, etc.)",
-    "covid": "🦠 COVID-19 Period"
+    "covid": "🦠 COVID-19 Period",
+    "season": "🌦️ Seasons"
 }
-def filter_significant_events(events, data_start_date, data_end_date, max_events_per_category=5):
-    """
-    Filter events to show only the most significant ones
-    
-    Args:
-        events: List of (name, start, end, category) tuples
-        data_start_date: Start of data range
-        data_end_date: End of data range
-        max_events_per_category: Maximum events to show per category
-    
-    Returns:
-        Filtered list of events
-    """
-    
-    # Convert dates to datetime for comparison
-    if isinstance(data_start_date, pd.Timestamp):
-        data_start_date = data_start_date.to_pydatetime()
-    if isinstance(data_end_date, pd.Timestamp):
-        data_end_date = data_end_date.to_pydatetime()
-    
-    # Group by category
-    events_by_category = {}
-    for event in events:
-        name, start, end, category = event
-        
-        # Convert to datetime
-        if isinstance(start, date) and not isinstance(start, datetime):
-            start = datetime.combine(start, datetime.min.time())
-        if isinstance(end, date) and not isinstance(end, datetime):
-            end = datetime.combine(end, datetime.min.time())
-        
-        # Skip events outside data range
-        if end < data_start_date or start > data_end_date:
-            continue
-        
-        if category not in events_by_category:
-            events_by_category[category] = []
-        
-        events_by_category[category].append((name, start, end, category))
-    
-    # Keep all seasons and COVID (they're contextual)
-    filtered_events = []
-    for category in ["season", "covid"]:
-        if category in events_by_category:
-            filtered_events.extend(events_by_category[category])
-    
-    # Limit other categories
-    for category in ["religious", "cultural", "institutional"]:
-        if category in events_by_category:
-            # Sort by start date and take the most recent
-            category_events = sorted(
-                events_by_category[category], 
-                key=lambda x: x[1], 
-                reverse=True
-            )[:max_events_per_category]
-            filtered_events.extend(category_events)
-    
-    return filtered_events
+
 # ====================== SEASONAL PRICE ANALYSIS WITH EVENT MARKERS ====================== 
 def plot_seasonal_prices_with_events(df, date_col, price_col, events, title="Seasonal Price Analysis"):
     """
@@ -775,7 +720,7 @@ def plot_seasonal_prices_with_events(df, date_col, price_col, events, title="Sea
     
     for name, start, end, category in events:
         # Skip seasons and covid (covid is only background)
-        if category in ["season", "covid"]:
+        if category in ["covid"]:
             continue
         
         start_dt = _convert_to_datetime(start)
@@ -810,7 +755,7 @@ def plot_seasonal_prices_with_events(df, date_col, price_col, events, title="Sea
         fig.add_trace(go.Scatter(
             x=data['dates'],
             y=data['prices'],
-            mode='markers',
+            mode='markers', 
             name=EVENT_NAMES_DISPLAY[category],
             marker=dict(
                 color=EVENT_MARKER_COLORS[category],
@@ -1056,32 +1001,18 @@ st.markdown("---")
 # 2. PRICE EVOLUTION
 # ==========================================
 st.markdown("## 2. Price Evolution Over Time")
-st.caption("Historical analysis of pricing trends and distribution.")
-
-st.markdown("### Median Price Trend")
-fig_trend = go.Figure()
-fig_trend.add_trace(go.Scatter(
-    x=monthly_data['month'], 
-    y=monthly_data['median_price'], 
-    mode='lines+markers', 
-    name='Median Price',
-    line=dict(color='#4CAF50', width=3), 
-    marker=dict(size=8)
-))
-fig_trend.update_layout(template='plotly_dark', height=300, margin=dict(l=0, r=0, t=20, b=0), xaxis_title="", yaxis_title="Price (DZD)", hovermode='x unified')
-st.plotly_chart(fig_trend, use_container_width=True)
+st.caption("Historical analysis of pricing trends.")
 
 # Generate events
 food_events = generate_food_events(start_year=2015, end_year=2025)
 
-st.markdown("## 📊 Seasonal Price Trends & Event Analysis")
+st.markdown("### 📊 Seasonal Price Trends & Event Analysis")
 st.caption("Analyze how religious, cultural, and institutional events impact food prices over time.")
 
 # Event Legend
 st.markdown("---")
 
 # Main seasonal plot with all years
-st.markdown("### Complete Timeline (2015-2025)")
 fig_seasonal = plot_seasonal_prices_with_events(
     df_filtered, 
     'date', 

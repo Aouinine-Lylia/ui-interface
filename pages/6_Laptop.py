@@ -54,12 +54,14 @@ ALGERIAN_WILAYAS_COORDS = {
 
 EVENT_MARKER_COLORS = {
     "institutional": "#9C27B0",  # Purple
-    "covid": "#F44336"           # Red
+    "covid": "#F44336"  ,         # Red
+    "season": "#607D8B"         # Blue Grey (not used for markers)
 }
 
 EVENT_NAMES_DISPLAY = {
     "institutional": "🏛️ Institutional Events (School, BAC, etc.)",
-    "covid": "🦠 COVID-19 Period"
+    "covid": "🦠 COVID-19 Period", 
+    "season": "🌦️ Seasons"
 }
 
 # ============== Custom CSS (High Contrast & Styles) ==============
@@ -187,7 +189,7 @@ def filter_significant_events(events, data_start_date, data_end_date, max_events
         events_by_category[category].append((name, start, end, category))
     
     filtered_events = []
-    for category in ["season", "covid"]:
+    for category in ["covid"]:
         if category in events_by_category:
             filtered_events.extend(events_by_category[category])
     
@@ -700,7 +702,7 @@ with kpi1:
     st.markdown(create_kpi_card_with_explanation(
         title="Median Price (DZD)",
         value=f"{current_median:,.0f}",
-        subtitle=f"≈ {current_median/220:.0f} USD | MoM: {trend_change_pct:+.1f}%",
+        subtitle=f"MoM: {trend_change_pct:+.1f}%",
         explanation="The middle value of all prices - half are higher, half are lower. More reliable than average for skewed data.",
         trend_color=trend_color
     ), unsafe_allow_html=True)
@@ -742,25 +744,25 @@ st.markdown("---")
 st.markdown("## 2. Price Evolution Over Time")
 st.caption("Historical analysis of pricing trends and market distribution.")
 
-st.markdown("### Median Price Trend (DZD)")
-fig_line = go.Figure()
-fig_line.add_trace(go.Scatter(
-    x=monthly_data['month'], 
-    y=monthly_data['median_price'], 
-    mode='lines+markers', 
-    name='Median Price', 
-    line=dict(color='#2196F3', width=3), 
-    marker=dict(size=8)
-))
-fig_line.update_layout(
-    template='plotly_dark', 
-    height=300, 
-    margin=dict(l=0, r=0, t=20, b=0), 
-    xaxis_title="", 
-    yaxis_title="Price (DZD)", 
-    hovermode='x unified'
+# ==========================================
+# 2.5 SEASONAL ANALYSIS
+# ==========================================
+st.markdown("### Seasonal Price Trends & Event Analysis")
+st.caption("Analyze how institutional events (school, BAC, Black Friday) and COVID-19 impact laptop prices over time.")
+
+# Generate laptop events
+laptop_events = generate_laptop_events(start_year=2018, end_year=2025)
+
+fig_seasonal = plot_seasonal_prices_with_events(
+    df, 
+    'date', 
+    'price_preview', 
+    laptop_events,
+    "Laptop Price Trends with Event Markers"
 )
-st.plotly_chart(fig_line, use_container_width=True)
+st.plotly_chart(fig_seasonal, use_container_width=True)
+
+st.markdown("---")
 
 st.markdown("### Price Distribution by Segment")
 fig_box = px.box(
@@ -782,26 +784,7 @@ st.plotly_chart(fig_box, use_container_width=True)
 
 st.markdown("---")
 
-# ==========================================
-# 2.5 SEASONAL ANALYSIS
-# ==========================================
-st.markdown("## 2.5. Seasonal Price Trends & Event Analysis")
-st.caption("Analyze how institutional events (school, BAC, Black Friday) and COVID-19 impact laptop prices over time.")
 
-# Generate laptop events
-laptop_events = generate_laptop_events(start_year=2018, end_year=2025)
-
-st.markdown("### Complete Timeline")
-fig_seasonal = plot_seasonal_prices_with_events(
-    df, 
-    'date', 
-    'price_preview', 
-    laptop_events,
-    "Laptop Price Trends with Event Markers"
-)
-st.plotly_chart(fig_seasonal, use_container_width=True)
-
-st.markdown("---")
 
 # ==========================================
 # 3. MARKET SEGMENTATION (NO FILTER - USE ORIGINAL DATA)
@@ -828,36 +811,20 @@ with c1:
     st.plotly_chart(fig_cpu, use_container_width=True)
 
 with c2:
-    st.markdown("### Top Brands by Volume")
-    brand_counts = df_laptops['model_name'].value_counts().head(10)
-    fig_brands = px.bar(
-        x=brand_counts.values, 
-        y=brand_counts.index, 
-        orientation='h', 
-        title="Most Listed Laptop Brands (All Data)"
-    )
-    fig_brands.update_layout(
-        template='plotly_dark', 
-        height=350, 
-        xaxis_title="Listings", 
-        yaxis_title=""
-    )
-    st.plotly_chart(fig_brands, use_container_width=True)
-
-st.markdown("### Value Analysis: Price per GB of RAM")
-if df_laptops['RAM_SIZE'].sum() > 0:
-    df_laptops['price_per_gb_ram'] = df_laptops['price_preview'] / df_laptops['RAM_SIZE'].replace(0, 1)
-    value_data = df_laptops.groupby('model_name')['price_per_gb_ram'].mean().sort_values(ascending=True).head(10)
-    fig_value = px.bar(
-        x=value_data.values, 
-        y=value_data.index, 
-        orientation='h', 
-        title="Best Value Laptops (Lower = Better, All Data)", 
-        labels={'x': 'DZD per GB RAM', 'y': 'Brand'}
-    )
-    fig_value.update_layout(template='plotly_dark', height=400)
-    fig_value.update_traces(marker_color='#66BB6A')
-    st.plotly_chart(fig_value, use_container_width=True)
+    st.markdown("### Value Analysis: Price per GB of RAM")
+    if df_laptops['RAM_SIZE'].sum() > 0:
+        df_laptops['price_per_gb_ram'] = df_laptops['price_preview'] / df_laptops['RAM_SIZE'].replace(0, 1)
+        value_data = df_laptops.groupby('model_name')['price_per_gb_ram'].mean().sort_values(ascending=True).head(10)
+        fig_value = px.bar(
+            x=value_data.values, 
+            y=value_data.index, 
+            orientation='h', 
+            title="Best Value Laptops (Lower = Better, All Data)", 
+            labels={'x': 'DZD per GB RAM', 'y': 'Brand'}
+        )
+        fig_value.update_layout(template='plotly_dark', height=400)
+        fig_value.update_traces(marker_color='#66BB6A')
+        st.plotly_chart(fig_value, use_container_width=True)
 
 st.markdown("---")
 
