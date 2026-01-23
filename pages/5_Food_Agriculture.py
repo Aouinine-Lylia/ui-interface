@@ -849,7 +849,20 @@ if st.session_state.get('show_predict_form', False):
             col_a, col_b = st.columns(2)
             
             with col_a:
-                commodity = st.text_input("Commodity", value="Tomatoes")
+                # Get unique commodities from the dataset
+                unique_commodities = sorted(df_prices['commodity'].unique().tolist())
+                
+                # Set default to "Tomatoes" if it exists, otherwise pick the first item
+                try:
+                    default_index = unique_commodities.index("Tomatoes")
+                except ValueError:
+                    default_index = 0
+                
+                commodity = st.selectbox(
+                    "Commodity", 
+                    options=unique_commodities, 
+                    index=default_index
+                )
                 category = st.selectbox("Category", [
                     "cereals and tubers", "meat, fish and eggs", "milk and dairy",
                     "miscellaneous food", "non-food", "oil and fats",
