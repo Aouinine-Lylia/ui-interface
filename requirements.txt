@@ -5,3 +5,7 @@ plotly
 scikit-learn
 joblib
 requests
+hijri_converter
+xgboost
+lightgbm==4.3.0
+scikit-learn==1.6.1
