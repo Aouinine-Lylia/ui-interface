@@ -190,18 +190,19 @@ st.markdown("""
 # ============== Sidebar Navigation ==============
 with st.sidebar:
     # Logo and title
-    st.markdown("""
-        <div style='text-align: left; padding: 20px 0;'>
-            <span class='watermelon-icon'>🍉</span>
-            <div style='display: inline-block; vertical-align: middle;'>
-                <div class='app-title'>DZA PriceSight</div>
-                <div class='app-subtitle'>AI Price Insights</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
+
+    col1, col2 = st.columns([1, 10])
+
+    with col1:
+        st.image("watermelon.png", width=64, use_container_width=False)
+
+    with col2:
+        st.markdown(
+            "<div style='font-size:28px; font-weight:700; margin-top:-10px;'>DZA PriceSight</div>"
+           , unsafe_allow_html=True
+        )
+    st.markdown("<div style='font-size:14px; color:gray;'>AI Price Insights</div>", unsafe_allow_html=True)
     st.markdown("---")
-    
     # Main Navigation
     st.markdown("<p class='label'>Main</p>", unsafe_allow_html=True)
     st.page_link("landingPage.py", label="Overview", icon="🏠")
@@ -214,22 +215,20 @@ with st.sidebar:
     st.page_link("pages/6_Laptop.py", label="Laptops", icon="💻")
 
 # ============== Header ==============
-st.markdown("""
-    <div class='header-container'>
-        <div style='display: flex; align-items: center; justify-content: space-between;'>
-            <div style='display: flex; align-items: center;'>
-                <span class='watermelon-icon'>🍉</span>
-                <div>
-                    <div class='app-title'>DZA PriceSight</div>
-                    <div class='app-subtitle'>AI-Powered Price Intelligence Platform</div>
-                </div>
-            </div>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown("<div class='header-container'></div>", unsafe_allow_html=True)
+col1, col2 = st.columns([1, 10])
+
+with col1:
+        st.image("watermelon.png", width=64, use_container_width=False)
+
+with col2:
+        st.markdown(
+            "<div style='font-size:48px; font-weight:700; margin-top:-6px;'>DZA PriceSight</div>"
+           , unsafe_allow_html=True
+        )
 
 # ============== Main Landing Page ==============
-st.markdown("# 🏠 Welcome to DZA PriceSight")
+st.markdown("### ")
 st.markdown("### Real-time market intelligence for the Algerian Economy")
 
 st.markdown("---")

@@ -495,15 +495,18 @@ model = load_my_model()
 
 # Sidebar
 with st.sidebar:
-    st.markdown("""
-        <div style='text-align: left; padding: 20px 0;'>
-            <span class='watermelon-icon'>🍉</span>
-            <div style='display: inline-block; vertical-align: middle;'>
-                <div class='app-title'>DZA PriceSight</div>
-                <div class='app-subtitle'>AI Price Insights</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 10])
+
+    with col1:
+        st.image("watermelon.png", width=64, use_container_width=False)
+
+    with col2:
+        st.markdown(
+            "<div style='font-size:28px; font-weight:700; margin-top:-10px;'>DZA PriceSight</div>"
+           , unsafe_allow_html=True
+        )
+    st.markdown("<div style='font-size:14px; color:gray;'>AI Price Insights</div>", unsafe_allow_html=True)
+    st.markdown("---")
     st.markdown("---")
     st.markdown("<p class='label'>Main</p>", unsafe_allow_html=True)
     st.page_link("landingPage.py", label="Overview", icon="🏠")
