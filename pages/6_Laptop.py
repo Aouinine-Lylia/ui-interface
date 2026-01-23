@@ -252,7 +252,7 @@ def plot_seasonal_prices_with_events(df, date_col, price_col, events, title="Sea
     event_markers_by_category = {}
     
     for name, start, end, category in events:
-        if category in ["season", "covid"]:
+        if category in ["covid"]:
             continue
         
         start_dt = _convert_to_datetime(start)
